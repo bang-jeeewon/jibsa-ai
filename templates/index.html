@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>청약 분석 RAG 시스템</title>
+    <!-- FullCalendar CSS -->
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        background: #f0f2f5;
+        height: 100vh;
+        overflow: hidden;
+      }
+
+      .main-container {
+        display: flex;
+        height: 100vh;
+        padding: 20px;
+        gap: 20px;
+      }
+
+      /* 왼쪽 사이드바 (캘린더 영역) - 35% */
+      .sidebar {
+        flex: 0 0 350px;
+        background: white;
+        border-radius: 20px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+
+      .calendar-wrapper {
+        flex: 1;
+        overflow-y: auto;
+      }
+
+      #calendar {
+        font-size: 0.9em;
+      }
+
+      .sidebar-header {
+        margin-bottom: 15px;
+        padding-bottom: 15px;
+        border-bottom: 1px solid #eee;
+      }
+
+      .sidebar-header h2 {
+        font-size: 1.2rem;
+        color: #333;
+      }
+
+      /* 오른쪽 메인 영역 (상세정보 + 챗봇) - 나머지 */
+      .content-area {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        background: white;
+        border-radius: 20px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        overflow: hidden;
+        position: relative;
+      }
+
+      /* 대기 화면 (선택 전) */
+      .empty-state {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        background: white;
+        z-index: 10;
+        color: #666;
+      }
+
+      /* 상세 정보 헤더 */
+      .detail-header {
+        padding: 20px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        flex: 0 0 auto;
+      }
+
+      .detail-header h2 {
+        margin-bottom: 10px;
+      }
+
+      .apt-info-badges {
+        display: flex;
+        gap: 10px;
+        font-size: 0.9rem;
+      }
+
+      .badge {
+        background: rgba(255, 255, 255, 0.2);
+        padding: 4px 8px;
+        border-radius: 4px;
+      }
+
+      /* 채팅 및 분석 영역 */
+      .chat-section {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        background: #f8f9fa;
+      }
+
+      .chat-messages {
+        flex: 1;
+        padding: 20px;
+        overflow-y: auto;
+      }
+
+      .message {
+        margin-bottom: 15px;
+        max-width: 80%;
+        padding: 12px 16px;
+        border-radius: 12px;
+        line-height: 1.5;
+        position: relative;
+      }
+
+      .message.assistant {
+        background: white;
+        border: 1px solid #e0e0e0;
+        margin-right: auto;
+        border-bottom-left-radius: 0;
+      }
+
+      .message.user {
+        background: #667eea;
+        color: white;
+        margin-left: auto;
+        border-bottom-right-radius: 0;
+      }
+
+      .chat-input-area {
+        padding: 20px;
+        background: white;
+        border-top: 1px solid #eee;
+        display: flex;
+        gap: 10px;
+      }
+
+      .chat-input-area input {
+        flex: 1;
+        padding: 12px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        outline: none;
+      }
+
+      .chat-input-area button {
+        padding: 10px 20px;
+        background: #667eea;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+      }
+
+      /* 로딩 애니메이션 */
+      .analyzing-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(255, 255, 255, 0.9);
+        display: none; /* JS로 제어 */
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        z-index: 20;
+      }
+
+      .loader {
+        width: 48px;
+        height: 48px;
+        border: 5px solid #667eea;
+        border-bottom-color: transparent;
+        border-radius: 50%;
+        animation: rotation 1s linear infinite;
+        margin-bottom: 20px;
+      }
+
+      .progress-text {
+        font-size: 1.1rem;
+        color: #333;
+        font-weight: bold;
+      }
+
+      .sub-text {
+        margin-top: 8px;
+        color: #666;
+        font-size: 0.9rem;
+      }
+
+      @keyframes rotation {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+
+      /* 캘린더 커스텀 */
+      .fc-event {
+        cursor: pointer;
+        font-size: 0.85em;
+      }
+      .fc-toolbar-title {
+        font-size: 1.1em !important;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="main-container">
+      <!-- 좌측: 미니 캘린더 -->
+      <div class="sidebar">
+        <div class="sidebar-header">
+          <h2>📅 청약 일정</h2>
+        </div>
+        <div class="calendar-wrapper">
+          <div id="calendar"></div>
+        </div>
+      </div>
+
+      <!-- 우측: 상세 정보 및 채팅 -->
+      <div class="content-area">
+        <!-- 초기화면 -->
+        <div id="empty-state" class="empty-state">
+          <div style="font-size: 3rem; margin-bottom: 20px">👈</div>
+          <h3>좌측 달력에서 관심 있는 청약 단지를 선택해주세요</h3>
+          <p>선택 시 AI가 공고문을 분석하여 알려드립니다.</p>
+        </div>
+
+        <!-- 분석 로딩 화면 -->
+        <div id="analyzing-overlay" class="analyzing-overlay">
+          <div class="loader"></div>
+          <div class="progress-text">공고문을 분석하고 있습니다...</div>
+          <div class="sub-text" id="progress-detail">PDF 다운로드 중...</div>
+        </div>
+
+        <!-- 상세 컨텐츠 (숨겨져 있다가 선택 시 표시) -->
+        <div id="detail-view" style="display: none; height: 100%; flex-direction: column">
+          <div class="detail-header">
+            <h2 id="apt-name">아파트 이름</h2>
+            <div class="apt-info-badges">
+              <span class="badge" id="apt-region">지역</span>
+              <span class="badge" id="apt-period">접수 기간</span>
+              <span class="badge" id="apt-house-type">주택 유형</span>
+            </div>
+          </div>
+
+          <div class="chat-section">
+            <div class="chat-messages" id="messages">
+              <div class="message assistant">
+                안녕하세요! 해당 공고문에 대해 분석이 완료되었습니다.<br />
+                궁금한 점을 물어보시면 공고문 내용을 바탕으로 답변해 드릴게요.
+              </div>
+            </div>
+
+            <div class="chat-input-area">
+              <input
+                type="text"
+                id="question-input"
+                placeholder="예: 전매제한 기간은 어떻게 되나요?"
+                onkeypress="if(event.key === 'Enter') sendQuestion()"
+              />
+              <button onclick="sendQuestion()">전송</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      document.addEventListener('DOMContentLoaded', function () {
+        var calendarEl = document.getElementById('calendar');
+        var calendar = new FullCalendar.Calendar(calendarEl, {
+          initialView: 'dayGridMonth',
+          headerToolbar: {
+            left: 'prev,next',
+            center: 'title',
+            right: 'today',
+          },
+          height: '100%',
+          locale: 'ko',
+          dayMaxEvents: true, // 이벤트가 많으면 +more 표시
+          events: '/api/calendar-data', // 백엔드에서 데이터 로드
+          eventClick: function (info) {
+            // 공고 클릭 시 처리
+            handleEventClick(info.event);
+          },
+          eventDidMount: function (info) {
+            // 툴팁 등으로 전체 이름 보여주기 (선택사항)
+            info.el.title = info.event.title;
+          },
+        });
+        calendar.render();
+      });
+
+      async function handleEventClick(event) {
+        const data = event.extendedProps;
+
+        // 1. 화면 전환 (분석 중 표시)
+        document.getElementById('empty-state').style.display = 'none';
+        document.getElementById('detail-view').style.display = 'none';
+        const overlay = document.getElementById('analyzing-overlay');
+        const progressText = document.getElementById('progress-detail');
+        overlay.style.display = 'flex';
+
+        // 2. 헤더 정보 업데이트
+        document.getElementById('apt-name').textContent = event.title;
+        document.getElementById('apt-region').textContent = data.area || '지역 정보 없음';
+        document.getElementById('apt-period').textContent = `접수: ${data.startDate} ~ ${data.endDate}`;
+        document.getElementById('apt-house-type').textContent = data.houseType || '정보 없음';
+
+        try {
+          // 3. 분석 API 호출 (PDF 다운로드 -> 분석)
+          progressText.textContent = '공고문 PDF를 다운로드하고 있습니다...';
+
+          // 실제 API 연동 (아직 구현 전이라 타임아웃으로 흉내)
+          // const response = await fetch('/api/analyze', { ... });
+
+          await new Promise((r) => setTimeout(r, 1500)); // 가짜 딜레이 1.5초
+          progressText.textContent = 'AI가 주요 내용을 추출하고 있습니다...';
+          await new Promise((r) => setTimeout(r, 1500)); // 가짜 딜레이 1.5초
+
+          // 4. 완료 후 상세 화면 표시
+          overlay.style.display = 'none';
+          document.getElementById('detail-view').style.display = 'flex';
+
+          // 채팅창 초기화 (새로운 공고이므로)
+          const messages = document.getElementById('messages');
+          messages.innerHTML = `
+                    <div class="message assistant">
+                        <strong>${event.title}</strong> 공고문 분석이 완료되었습니다.<br>
+                        무엇이든 물어보세요! (예: 1순위 자격 조건, 전매 제한 등)
+                    </div>
+                `;
+        } catch (error) {
+          alert('분석 중 오류가 발생했습니다.');
+          overlay.style.display = 'none';
+          document.getElementById('empty-state').style.display = 'flex';
+        }
+      }
+
+      async function sendQuestion() {
+        const input = document.getElementById('question-input');
+        const messages = document.getElementById('messages');
+        const question = input.value.trim();
+
+        if (!question) return;
+
+        // 사용자 메시지 추가
+        messages.innerHTML += `<div class="message user">${question}</div>`;
+        input.value = '';
+        messages.scrollTop = messages.scrollHeight;
+
+        // 로딩 표시
+        const loadingId = 'loading-' + Date.now();
+        messages.innerHTML += `<div id="${loadingId}" class="message assistant">답변 생성 중...</div>`;
+        messages.scrollTop = messages.scrollHeight;
+
+        try {
+          const response = await fetch('/api/query', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ question: question }),
+          });
+          const data = await response.json();
+
+          // 로딩 제거 및 응답 표시
+          document.getElementById(loadingId).remove();
+          messages.innerHTML += `<div class="message assistant">${data.answer}</div>`;
+        } catch (error) {
+          document.getElementById(loadingId).remove();
+          messages.innerHTML += `<div class="message assistant">오류 발생: ${error.message}</div>`;
+        }
+        messages.scrollTop = messages.scrollHeight;
+      }
+    </script>
+  </body>
+</html>
