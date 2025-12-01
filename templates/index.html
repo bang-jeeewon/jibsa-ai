@@ -292,8 +292,8 @@
 
     <script>
       document.addEventListener('DOMContentLoaded', function () {
-        var calendarEl = document.getElementById('calendar');
-        var calendar = new FullCalendar.Calendar(calendarEl, {
+        const calendarEl = document.getElementById('calendar');
+        const calendar = new FullCalendar.Calendar(calendarEl, {
           initialView: 'dayGridMonth',
           headerToolbar: {
             left: 'prev,next',
@@ -318,6 +318,25 @@
 
       async function handleEventClick(event) {
         const data = event.extendedProps;
+        console.log(data);
+        // area
+        // :
+        // "전북"
+        // endDate
+        // :
+        // "2025-11-21"
+        // houseNo
+        // :
+        // "2025000565"
+        // houseType
+        // :
+        // "APT"
+        // pblancNo
+        // :
+        // "2025000565"
+        // startDate
+        // :
+        // "2025-11-19"
 
         // 1. 화면 전환 (분석 중 표시)
         document.getElementById('empty-state').style.display = 'none';
@@ -328,20 +347,33 @@
 
         // 2. 헤더 정보 업데이트
         document.getElementById('apt-name').textContent = event.title;
-        document.getElementById('apt-region').textContent = data.area || '지역 정보 없음';
+        document.getElementById('apt-region').textContent = data.subscrpt_area_code_nm || '지역 정보 없음';
         document.getElementById('apt-period').textContent = `접수: ${data.startDate} ~ ${data.endDate}`;
-        document.getElementById('apt-house-type').textContent = data.houseType || '정보 없음';
+        document.getElementById('apt-house-type').textContent = data.house_secd_nm || '정보 없음';
 
         try {
           // 3. 분석 API 호출 (PDF 다운로드 -> 분석)
           progressText.textContent = '공고문 PDF를 다운로드하고 있습니다...';
 
-          // 실제 API 연동 (아직 구현 전이라 타임아웃으로 흉내)
-          // const response = await fetch('/api/analyze', { ... });
+          // await new Promise((r) => setTimeout(r, 1500)); // 가짜 딜레이 1.5초
+          const response = await fetch('/api/analyze', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              pblanc_url: data.pblanc_url, // 모집공고문 상세 URL
+              house_manage_no: data.house_manage_no, // 주택관리번호
+              pblanc_no: data.pblanc_no, // 공고번호
+              house_secd: data.house_secd, // 주택구분코드
+            }),
+          });
 
-          await new Promise((r) => setTimeout(r, 1500)); // 가짜 딜레이 1.5초
-          progressText.textContent = 'AI가 주요 내용을 추출하고 있습니다...';
-          await new Promise((r) => setTimeout(r, 1500)); // 가짜 딜레이 1.5초
+          if (!response.ok) {
+            throw new Error('Network response was not ok');
+          }
+
+          const result = await response.json();
 
           // 4. 완료 후 상세 화면 표시
           overlay.style.display = 'none';
