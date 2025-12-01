@@ -28,7 +28,7 @@ class ApplyhomeAPIClient:
         """
         endpoint = f"{self.base_url}/ApplyhomeInfoDetailSvc/v1/getAPTLttotPblancDetail"
 
-        params = {      
+        params = {
             "serviceKey": self.api_key,  # 인증키 추가!
             "houseManageNo": houseManageNo,
             "pblancNo": pblancNo,

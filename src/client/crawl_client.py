@@ -23,14 +23,14 @@ class ApplyhomeCrawlClient:
         }
     
     # 분양정보 상세조회 response에서 PBLANC_URL로 모집공고문 PDF 다운로드 URL 조회
-    def get_pdf_url_by_pblanc_url(self, pblancUrl):
+    def get_pdf_url_by_pblanc_url(self, pblanc_url: str) -> str:
         """
         모집공고문 PDF 다운로드 URL 조회
 
         Args:
-            pblancUrl: 모집공고문 URL
+            pblanc_url: 모집공고문 URL
         """
-        response = self.sessiont.get(pblancUrl, headers=self.headers)
+        response = self.sessiont.get(pblanc_url, headers=self.headers)
 
         if response.status_code == 200:
             soup = BeautifulSoup(response.text, 'html.parser')
@@ -46,41 +46,41 @@ class ApplyhomeCrawlClient:
             return None
         return None
     
-    # houseManageNo, pblancNo, houseSecd를 이용하여 모집공고문 PDF 다운로드 URL 조회
-    def get_pdf_url_by_params(self, houseManageNo, pblancNo, houseSecd):
-        """
-        모집공고문 PDF 다운로드 URL 조회
+    # # houseManageNo, pblancNo, houseSecd를 이용하여 모집공고문 PDF 다운로드 URL 조회
+    # def get_pdf_url_by_params(self, house_manage_no: str, pblanc_no: str, house_secd: str) -> str:
+    #     """
+    #     모집공고문 PDF 다운로드 URL 조회
 
-        Args:
-            houseManageNo: 주택관리번호
-            pblancNo: 공고번호
-            houseSecd: 주택구분코드
+    #     Args:
+    #         house_manage_no: 주택관리번호
+    #         pblanc_no: 공고번호
+    #         house_secd: 주택구분코드
         
-        Returns:
-            PDF 다운로드 URL
-        """
-        endpoint = f"{self.base_url}/ai/aia/selectAPTLttotPblancDetail.do"
+    #     Returns:
+    #         모집공고문 PDF 다운로드 URL
+    #     """
+    #     endpoint = f"{self.base_url}/ai/aia/selectAPTLttotPblancDetail.do"
 
-        params = {
-            "houseManageNo": houseManageNo,
-            "pblancNo": pblancNo,
-            "houseSecd": houseSecd,
-            "gvPgmId": "AIB01M01"
-        }
+    #     params = {
+    #         "houseManageNo": house_manage_no,
+    #         "pblancNo": pblanc_no,
+    #         "houseSecd": house_secd,
+    #         "gvPgmId": "AIB01M01"
+    #     }
 
-        response = self.sessiont.get(endpoint, params=params, headers=self.headers)
+    #     response = self.sessiont.get(endpoint, params=params, headers=self.headers)
 
-        if response.status_code == 200:
-            soup = BeautifulSoup(response.text, 'html.parser')
-            btn_tags = soup.select('a.radius_btn')
-            if btn_tags:
-                for btn in btn_tags:
-                    if '모집공고문 보기' in btn.get_text(strip=True):
-                        return btn['href']
-                        break
-            else:
-                return None
-        else:
-            return None
+    #     if response.status_code == 200:
+    #         soup = BeautifulSoup(response.text, 'html.parser')
+    #         btn_tags = soup.select('a.radius_btn')
+    #         if btn_tags:
+    #             for btn in btn_tags:
+    #                 if '모집공고문 보기' in btn.get_text(strip=True):
+    #                     return btn['href']
+    #                     break
+    #         else:
+    #             return None
+    #     else:
+    #         return None
 
-        return None
+    #     return None
