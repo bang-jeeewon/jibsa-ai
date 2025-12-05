@@ -50,11 +50,10 @@ def analyze_apt():
     pdf_path = download_pdf_service.download_pdf(download_url=download_url, file_name=f"{house_manage_no}_{pblanc_no}_{house_secd}.pdf")
     if not pdf_path:
         return jsonify({"status": "error", "message": "모집공고문 PDF 다운로드 실패"}), 500
-    
-    # 3. RAG 서비스에 PDF 등록
-    success = rag_service.ingest_pdf(pdf_path=pdf_path)
-    if not success:
-        return jsonify({"status": "error", "message": "PDF 등록 실패"}), 500
+
+    # 3. RAG 서비스에 PDF 등록 (ETF 구조)
+    # house_manage_no를 문서 ID로 사용하여 메타데이터 저장
+    rag_service.process_pdf_for_rag(pdf_path=pdf_path, doc_id=str(house_manage_no))
     
     return jsonify({"status": "success", "message": "PDF 등록 완료"})
 
@@ -64,11 +63,29 @@ def query():
     """챗봇 질의응답"""
     data = request.json
     question = data.get('question', '')
+    house_manage_no = data.get('house_manage_no') # 프론트에서 전달받은 공고 ID
     
-    # TODO RAG 모델을 통해 답변 생성
-    answer = rag_service.get_answer(question)
+    if not question:
+        return jsonify({"answer": "질문을 입력해주세요."})
 
-    return jsonify({"answer": answer})
+    # RAG 모델을 통해 답변 생성
+    try:
+        # doc_id 필터를 적용하여 해당 공고 내에서만 검색
+        answer = rag_service.answer_question(question, doc_id=str(house_manage_no))
+        return jsonify({"answer": answer})
+    except Exception as e:
+        print(f"Error generating answer: {e}")
+        return jsonify({"answer": "죄송합니다. 답변을 생성하는 중에 오류가 발생했습니다."}), 500
+
+
+@app.route('/api/reset', methods=['POST'])
+def reset_db():
+    """벡터 DB 초기화"""
+    try:
+        rag_service.clear_database()
+        return jsonify({"status": "success", "message": "DB가 초기화되었습니다."})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 
 @app.route('/api/calendar-data')
