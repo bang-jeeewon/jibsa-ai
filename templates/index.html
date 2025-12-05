@@ -3,7 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>청약 분석 RAG 시스템</title>
+    <title>청약 어시스턴트</title>
+    <!-- 파비콘 (말풍선 이모지) -->
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>💬</text></svg>"
+    />
     <!-- FullCalendar CSS -->
     <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
     <style>
@@ -87,6 +92,13 @@
         color: #666;
       }
 
+      /* 상세 뷰 컨테이너 */
+      #detail-view {
+        height: 100%;
+        flex-direction: column;
+        overflow: hidden; /* 자식 요소가 넘치지 않도록 제한 */
+      }
+
       /* 상세 정보 헤더 */
       .detail-header {
         padding: 20px;
@@ -117,12 +129,15 @@
         display: flex;
         flex-direction: column;
         background: #f8f9fa;
+        overflow: hidden; /* 내부 스크롤을 위해 필수 */
+        min-height: 0; /* Flexbox 중첩 시 스크롤 버그 방지 */
       }
 
       .chat-messages {
         flex: 1;
         padding: 20px;
         overflow-y: auto;
+        min-height: 0; /* Flex item 스크롤 버그 방지 */
       }
 
       .message {
@@ -132,6 +147,8 @@
         border-radius: 12px;
         line-height: 1.5;
         position: relative;
+        white-space: pre-wrap; /* 줄바꿈 문자(\n) 처리 */
+        word-break: break-word; /* 긴 단어 줄바꿈 */
       }
 
       .message.assistant {
@@ -239,6 +256,14 @@
         <div class="calendar-wrapper">
           <div id="calendar"></div>
         </div>
+        <!-- <div style="margin-top: 10px; text-align: center">
+          <button
+            onclick="resetDatabase()"
+            style="background: #ff6b6b; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 0.8rem"
+          >
+            🗑️ DB 초기화
+          </button>
+        </div> -->
       </div>
 
       <!-- 우측: 상세 정보 및 채팅 -->
@@ -258,7 +283,7 @@
         </div>
 
         <!-- 상세 컨텐츠 (숨겨져 있다가 선택 시 표시) -->
-        <div id="detail-view" style="display: none; height: 100%; flex-direction: column">
+        <div id="detail-view" style="display: none">
           <div class="detail-header">
             <h2 id="apt-name">아파트 이름</h2>
             <div class="apt-info-badges">
@@ -316,8 +341,11 @@
         calendar.render();
       });
 
+      let currentHouseManageNo = null; // 현재 선택된 공고 ID 저장
+
       async function handleEventClick(event) {
         const data = event.extendedProps;
+        currentHouseManageNo = data.house_manage_no; // 선택 시 ID 저장
 
         // 1. 화면 전환 (분석 중 표시)
         document.getElementById('empty-state').style.display = 'none';
@@ -362,12 +390,7 @@
 
           // 채팅창 초기화 (새로운 공고이므로)
           const messages = document.getElementById('messages');
-          messages.innerHTML = `
-                    <div class="message assistant">
-                        <strong>${event.title}</strong> 공고문 분석이 완료되었습니다.<br>
-                        무엇이든 물어보세요! (예: 1순위 자격 조건, 전매 제한 등)
-                    </div>
-                `;
+          messages.innerHTML = `<div class="message assistant"><strong>${event.title}</strong> 공고문 분석이 완료되었습니다.<br>무엇이든 물어보세요! (예: 1순위 자격 조건, 전매 제한 등)</div>`;
         } catch (error) {
           alert('분석 중 오류가 발생했습니다.');
           overlay.style.display = 'none';
@@ -383,31 +406,56 @@
         if (!question) return;
 
         // 사용자 메시지 추가
-        messages.innerHTML += `<div class="message user">${question}</div>`;
+        messages.insertAdjacentHTML('beforeend', `<div class="message user">${question}</div>`);
         input.value = '';
         messages.scrollTop = messages.scrollHeight;
 
         // 로딩 표시
         const loadingId = 'loading-' + Date.now();
-        messages.innerHTML += `<div id="${loadingId}" class="message assistant">답변 생성 중...</div>`;
+        messages.insertAdjacentHTML('beforeend', `<div id="${loadingId}" class="message assistant">답변 생성 중...</div>`);
         messages.scrollTop = messages.scrollHeight;
 
         try {
           const response = await fetch('/api/query', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ question: question }),
+            body: JSON.stringify({
+              question: question,
+              house_manage_no: currentHouseManageNo, // 질문 시 ID 함께 전송
+            }),
           });
           const data = await response.json();
 
           // 로딩 제거 및 응답 표시
-          document.getElementById(loadingId).remove();
-          messages.innerHTML += `<div class="message assistant">${data.answer}</div>`;
+          const loadingElement = document.getElementById(loadingId);
+          if (loadingElement) loadingElement.remove();
+
+          messages.insertAdjacentHTML('beforeend', `<div class="message assistant">${data.answer}</div>`);
         } catch (error) {
-          document.getElementById(loadingId).remove();
-          messages.innerHTML += `<div class="message assistant">오류 발생: ${error.message}</div>`;
+          const loadingElement = document.getElementById(loadingId);
+          if (loadingElement) loadingElement.remove();
+
+          messages.insertAdjacentHTML('beforeend', `<div class="message assistant">오류 발생: ${error.message}</div>`);
         }
+        // 메시지 추가 후 스크롤 최하단 이동
         messages.scrollTop = messages.scrollHeight;
+      }
+
+      async function resetDatabase() {
+        if (!confirm('정말 모든 분석 데이터를 삭제하시겠습니까?')) return;
+
+        try {
+          const response = await fetch('/api/reset', { method: 'POST' });
+          const result = await response.json();
+          if (result.status === 'success') {
+            alert('DB가 초기화되었습니다.');
+            location.reload(); // 페이지 새로고침
+          } else {
+            alert('초기화 실패: ' + result.message);
+          }
+        } catch (error) {
+          alert('오류 발생: ' + error.message);
+        }
       }
     </script>
   </body>
