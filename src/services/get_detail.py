@@ -7,7 +7,7 @@ from src.client.api_client import ApplyhomeAPIClient
 client = ApplyhomeAPIClient()
 
 # 공고 상세 조회
-detail = client.get_detail(houseManageNo="2025000486", pblancNo="2025000486")
+detail = client.get_detail(houseDtlSecd="01", start_date="2025-12-01", end_date="2025-12-31", page=1)
 
 # 저장 경로 설정 (Path 객체로 변환!)
 save_path = Path("data/response/get_detail.json")

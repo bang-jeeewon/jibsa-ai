@@ -1,18 +1,20 @@
 from flask import Flask, jsonify, render_template, request
 import json
 import os
+from datetime import datetime, timedelta
 from src.services.crawl_url import CrawlUrlService
 from src.services.download_pdf import DownloadPdfService
 from src.services.rag_service import RAGService
+from src.client.api_client import ApplyhomeAPIClient # 클라이언트 추가
 
 # Flask 앱 인스턴스
 app = Flask(__name__, template_folder='../templates')
 
-
-# RAG 서비스 전역 인스턴스 (앱 시작 시 초기화)
+# 서비스 전역 인스턴스
 crawl_url_service = CrawlUrlService()
 download_pdf_service = DownloadPdfService()
 rag_service = RAGService()
+api_client = ApplyhomeAPIClient() # API 클라이언트 초기화
 
 
 
@@ -90,32 +92,72 @@ def reset_db():
 
 @app.route('/api/calendar-data')
 def get_calendar_data():
-    """캘린더에 표시할 데이터 반환"""
-    data = load_apt_data()
-    events = []
+    """캘린더에 표시할 데이터 반환 (실시간 API 연동)"""
+    start_str = request.args.get('start') # 예: 2024-05-01
+    end_str = request.args.get('end')     # 예: 2024-06-02
     
-    for apt in data.get('data', []):
-        # 접수 시작일을 이벤트 날짜로 사용
-        if apt.get('RCEPT_BGNDE'):
-            events.append({
-                'title': apt.get('HOUSE_NM'),
-                'start': apt.get('RCEPT_BGNDE'),
-                'end': apt.get('RCEPT_ENDDE'), # FullCalendar는 end 날짜의 00:00까지를 의미하므로 실제로는 하루 더해야 꽉 차게 나오지만 일단 그대로 둠
-                'color': '#667eea', # 기본 색상
-                # 추가 정보 (상세 화면용)
-                'extendedProps': {
-                    'pblanc_url': apt.get('PBLANC_URL'),
-                    'house_manage_no': apt.get('HOUSE_MANAGE_NO'),
-                    'pblanc_no': apt.get('PBLANC_NO'),
-                    'house_secd': apt.get('HOUSE_SECD'),
-                    'house_secd_nm': apt.get('HOUSE_SECD_NM'),
-                    'subscrpt_area_code_nm': apt.get('SUBSCRPT_AREA_CODE_NM'),
-                    'startDate': apt.get('RCEPT_BGNDE'),
-                    'endDate': apt.get('RCEPT_ENDDE')
-                }
-            })
-            
-    return jsonify(events)
+    # FullCalendar 날짜 포맷 (YYYY-MM-DD)을 API 날짜 포맷으로 변환 필요 시 처리
+    # 여기서는 그대로 사용 (API가 YYYY-MM-DD도 받을 수 있다고 가정)
+    
+    print(f"📅 캘린더 데이터 요청: {start_str} ~ {end_str}")
+
+    try:
+        # 민영(01) + 국민(03) 데이터를 모두 가져와야 함 (필요하다면)
+        # 일단 기본은 '01'(민영)만 가져오거나, 두 번 호출해서 합칠 수도 있음.
+        # 여기서는 '01'만 먼저 테스트
+        response_data = api_client.get_detail(
+            houseDtlSecd="01", 
+            start_date=start_str, 
+            end_date=end_str,
+            page=1
+        )
+        
+        items = response_data.get('data', [])
+        
+        # 국민주택('03')도 필요하면 추가 호출해서 items에 extend
+        # response_data_03 = api_client.get_detail(houseDtlSecd="03", start_date=start_str, end_date=end_str)
+        # items.extend(response_data_03.get('data', []))
+
+        events = []
+        for apt in items:
+            # 접수 시작일을 이벤트 날짜로 사용
+            if apt.get('RCEPT_BGNDE'):
+                # FullCalendar는 end 날짜가 exclusive하므로 하루를 더해야 함
+                end_date = apt.get('RCEPT_ENDDE')
+                adjusted_end_date = end_date
+                
+                if end_date:
+                    try:
+                        dt = datetime.strptime(end_date, '%Y-%m-%d')
+                        dt_plus_one = dt + timedelta(days=1)
+                        adjusted_end_date = dt_plus_one.strftime('%Y-%m-%d')
+                    except ValueError:
+                        pass # 날짜 형식이 안맞으면 그대로 사용
+
+                events.append({
+                    'title': apt.get('HOUSE_NM'),
+                    'start': apt.get('RCEPT_BGNDE'),
+                    'end': adjusted_end_date, 
+                    'color': '#667eea',
+                    'extendedProps': {
+                        'pblanc_url': apt.get('PBLANC_URL'),
+                        'house_manage_no': apt.get('HOUSE_MANAGE_NO'),
+                        'pblanc_no': apt.get('PBLANC_NO'),
+                        'house_secd': apt.get('HOUSE_SECD'),
+                        'house_secd_nm': apt.get('HOUSE_SECD_NM'),
+                        'subscrpt_area_code_nm': apt.get('SUBSCRPT_AREA_CODE_NM'),
+                        'startDate': apt.get('RCEPT_BGNDE'),
+                        'endDate': adjusted_end_date
+                    }
+                })
+        
+        return jsonify(events)
+
+    except Exception as e:
+        print(f"❌ 캘린더 데이터 조회 실패: {e}")
+        return jsonify([])
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    # Windows에서 소켓 오류 방지를 위해 use_reloader=False 설정
+    # 0.0.0.0으로 설정하여 모든 인터페이스에서 접속 허용
+    app.run(host='0.0.0.0', port=5000, debug=True, use_reloader=False)
