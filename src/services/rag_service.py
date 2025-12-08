@@ -5,6 +5,9 @@ from openai import OpenAI
 
 # 분리된 모듈 import
 from src.services.rag.pdf_extractor import PDFExtractor
+from src.services.rag.pdf_extractor_pymupdf import PDFExtractorPyMuPDF
+from src.services.rag.pdf_extractor_llama import PDFExtractorLlama
+from src.services.rag.pdf_extractor_marker import PDFExtractorMarker
 from src.services.rag.data_processor import DataProcessor
 from src.services.rag.text_chunker import TextChunker
 from src.services.rag.vector_store import VectorStoreService
@@ -19,6 +22,9 @@ class RAGService:
         """
         # 각 단계별 담당자(Worker) 초기화
         self.pdf_extractor = PDFExtractor()
+        self.pdf_extractor_pymupdf = PDFExtractorPyMuPDF()
+        self.pdf_extractor_llama = PDFExtractorLlama()
+        self.pdf_extractor_marker = PDFExtractorMarker()
         self.data_processor = DataProcessor()
         self.text_chunker = TextChunker()
         self.vector_store = VectorStoreService(persist_directory)
@@ -32,7 +38,10 @@ class RAGService:
         """
         # 1. Extract: PDF에서 Raw 데이터 추출
         print(f"🔍 PDF 추출 시작: {pdf_path}")
-        raw_content = self.pdf_extractor.extract_content(pdf_path)
+        # raw_content = self.pdf_extractor.extract_content(pdf_path)
+        # raw_content = self.pdf_extractor_pymupdf.extract_content(pdf_path)
+        # raw_content = self.pdf_extractor_llama.extract_content(pdf_path)
+        raw_content = self.pdf_extractor_marker.extract_content(pdf_path)
         
         # (디버깅용) 추출된 표 데이터 엑셀 저장
         self.save_tables_to_excel(raw_content)

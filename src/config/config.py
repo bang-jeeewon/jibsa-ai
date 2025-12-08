@@ -9,3 +9,5 @@ API_KEY = os.getenv("API_KEY")
 PDF_BASE_URL = os.getenv("PDF_BASE_URL")
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
+LLAMA_CLOUD_API_KEY = os.getenv("LLAMA_CLOUD_API_KEY")
