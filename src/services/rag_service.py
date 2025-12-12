@@ -81,20 +81,20 @@ class RAGService:
         :param doc_id: 특정 문서에서만 검색하려면 ID 지정
         """
         print(f"🤔 질문 분석 중: {question} (doc_id: {doc_id})")
-        # 1회 질문 비용 계산 (정확한 계산):
+        # 1회 질문 비용 계산 (k=5 기준):
         # - 질문: 약 50 토큰
-        # - 검색된 컨텍스트 (k=2): 청크 2개 × 250 토큰 = 약 500 토큰
+        # - 검색된 컨텍스트 (k=5): 청크 5개 × 250 토큰 = 약 1,250 토큰
         # - 시스템 프롬프트: 약 50 토큰
-        # - 총 입력: 약 600 토큰
-        # - 출력: 80 토큰
+        # - 총 입력: 약 1,350 토큰
+        # - 출력: 200 토큰
         # - OpenAI gpt-4o-mini 가격: Input $0.15/1M tokens, Output $0.60/1M tokens
-        # - 비용: (600/1,000,000 × $0.15) + (200/1,000,000 × $0.60) = $0.00009 + $0.00012 = $0.00021 (약 0.27원)
-        # - 한 달 10,000원 예산: 하루 약 1,200개 질문 가능 (여전히 충분!)
+        # - 비용: (1,350/1,000,000 × $0.15) + (200/1,000,000 × $0.60) = $0.0002025 + $0.00012 = $0.0003225 (약 0.42원)
+        # - 한 달 10,000원 예산: 하루 약 806개 질문 가능 (여전히 충분!)
         
         # 1. Retrieve: 관련 문서 검색 (필터 적용)
-        # 비용 절감: k=2로 줄여서 입력 토큰 감소
+        # k=5로 설정하여 더 많은 컨텍스트 제공 (정확도 향상)
         filter_condition = {"doc_id": str(doc_id)} if doc_id else None
-        related_docs = self.vector_store.search(query=question, k=2, filter=filter_condition) 
+        related_docs = self.vector_store.search(query=question, k=5, filter=filter_condition) 
         
         if not related_docs:
             return "죄송합니다. 해당 공고문에서 관련 정보를 찾을 수 없습니다."

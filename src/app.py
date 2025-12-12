@@ -122,22 +122,21 @@ def get_calendar_data():
         for apt in items:
             # 접수 시작일을 이벤트 날짜로 사용
             if apt.get('RCEPT_BGNDE'):
-                # FullCalendar는 end 날짜가 exclusive하므로 하루를 더해야 함
                 end_date = apt.get('RCEPT_ENDDE')
+                # FullCalendar는 end 날짜가 exclusive하므로 캘린더 표시용으로 하루를 더함
                 adjusted_end_date = end_date
-                
                 if end_date:
                     try:
                         dt = datetime.strptime(end_date, '%Y-%m-%d')
                         dt_plus_one = dt + timedelta(days=1)
                         adjusted_end_date = dt_plus_one.strftime('%Y-%m-%d')
                     except ValueError:
-                        pass # 날짜 형식이 안맞으면 그대로 사용
-
+                        pass  # 날짜 형식이 안맞으면 그대로 사용
+                
                 events.append({
                     'title': apt.get('HOUSE_NM'),
                     'start': apt.get('RCEPT_BGNDE'),
-                    'end': adjusted_end_date, 
+                    'end': adjusted_end_date,  # 캘린더 표시용: 하루 더한 값 (12/18)
                     'color': '#667eea',
                     'extendedProps': {
                         'pblanc_url': apt.get('PBLANC_URL'),
@@ -147,7 +146,7 @@ def get_calendar_data():
                         'house_secd_nm': apt.get('HOUSE_SECD_NM'),
                         'subscrpt_area_code_nm': apt.get('SUBSCRPT_AREA_CODE_NM'),
                         'startDate': apt.get('RCEPT_BGNDE'),
-                        'endDate': adjusted_end_date
+                        'endDate': end_date  # 헤더/팝업 표시용: 원래 날짜 (12/17)
                     }
                 })
         
