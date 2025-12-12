@@ -1,6 +1,4 @@
 # RAG 시스템 핵심 라이브러리
-langchain>=0.1.0
-langchain-community>=0.0.10
 langchain-openai>=0.0.2
 langchain-huggingface>=0.0.2
 langchain-chroma>=0.1.0
@@ -12,15 +10,11 @@ openpyxl>=3.1.5
 tabulate>=0.9.0
 
 # PDF 처리
-pypdf>=3.17.0 # 기본 PDF 읽기
 pdfplumber>=0.10.0 # 테이블 추출에 유리
-PyMuPDF>=1.23.0 # 스캔본/이미지 처리에 유리
 PyMuPDF4LLM>=0.0.1
-llama-cloud-services>=0.0.1
 llama-parse>=0.0.1
 nest-asyncio>=1.0.0
 marker-pdf>=0.0.1
-
 
 # 벡터 데이터베이스
 chromadb>=0.4.0
@@ -34,6 +28,7 @@ openai>=1.10.0
 # 웹 프레임워크
 flask>=3.0.0
 flask-cors>=4.0.0
+gunicorn>=23.0.0
 
 # 웹 크롤링
 beautifulsoup4>=4.12.0

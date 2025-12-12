@@ -1,0 +1,30 @@
+# Git
+.git
+.gitignore
+
+# Python cache
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+
+# Environment
+.env
+venv/
+env/
+
+# IDE
+.vscode
+.idea
+
+# Local data (PDFs are downloaded dynamically, but vector_store needs persistence strategy)
+# data/pdfs/*
+# data/md/*
+# data/vector_store/* (Volume을 사용할 것이므로 로컬 데이터는 제외하거나 포함할지 결정 필요)
+# 일단 초기 데이터 포함을 위해 주석 처리 해둠.
+# 만약 이미지가 너무 커지면 데이터 폴더는 제외하고 Volume으로 관리해야 함.
+
+# Docker
+Dockerfile
+.dockerignore
+
