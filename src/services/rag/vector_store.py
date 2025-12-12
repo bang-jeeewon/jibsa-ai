@@ -3,7 +3,11 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
 
 class VectorStoreService:
-    def __init__(self, persist_directory='./data/vector_store'):
+    def __init__(self, persist_directory=None):
+        """
+        VectorStoreService 초기화
+        :param persist_directory: None이면 in-memory 모드 (파일 저장 안 함)
+        """
         self.persist_directory = persist_directory
         # self.embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
         self.embeddings = HuggingFaceEmbeddings(
@@ -12,9 +16,9 @@ class VectorStoreService:
             encode_kwargs={'normalize_embeddings': True}
         )
 
-        # DB 초기화
+        # DB 초기화 (persist_directory=None이면 in-memory 모드)
         self.vector_db = Chroma(
-            persist_directory=self.persist_directory,
+            persist_directory=self.persist_directory,  # None이면 메모리만 사용
             embedding_function=self.embeddings,
             collection_name="apt_notices" # 컬렉션 이름 지정
         )
@@ -39,7 +43,7 @@ class VectorStoreService:
             self.vector_db.delete_collection()
             # 컬렉션 재생성 (삭제 후 다시 쓰기 위해)
             self.vector_db = Chroma(
-                persist_directory=self.persist_directory,
+                persist_directory=self.persist_directory,  # None이면 in-memory
                 embedding_function=self.embeddings,
                 collection_name="apt_notices"
             )

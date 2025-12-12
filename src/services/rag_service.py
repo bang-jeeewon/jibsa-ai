@@ -5,9 +5,9 @@ from openai import OpenAI
 
 # 분리된 모듈 import
 from src.services.rag.pdf_extractor import PDFExtractor
-from src.services.rag.pdf_extractor_pymupdf import PDFExtractorPyMuPDF
-from src.services.rag.pdf_extractor_llama import PDFExtractorLlama
-from src.services.rag.pdf_extractor_marker import PDFExtractorMarker
+# from src.services.rag.pdf_extractor_pymupdf import PDFExtractorPyMuPDF
+# from src.services.rag.pdf_extractor_llama import PDFExtractorLlama
+# from src.services.rag.pdf_extractor_marker import PDFExtractorMarker
 from src.services.rag.data_processor import DataProcessor
 from src.services.rag.text_chunker import TextChunker
 from src.services.rag.vector_store import VectorStoreService
@@ -15,19 +15,20 @@ from src.services.rag.vector_store import VectorStoreService
 openai = OpenAI(api_key=OPENAI_API_KEY)
 
 class RAGService:
-    def __init__(self, persist_directory='./data/vector_store'):
+    def __init__(self, persist_directory=None):
         """
         RAG 파이프라인을 총괄하는 서비스 클래스.
         ETL 프로세스를 각 담당 클래스에게 위임하여 실행합니다.
+        :param persist_directory: None이면 in-memory 모드 (파일 저장 안 함, 서버 재시작 시 데이터 사라짐)
         """
         # 각 단계별 담당자(Worker) 초기화
         self.pdf_extractor = PDFExtractor()
-        self.pdf_extractor_pymupdf = PDFExtractorPyMuPDF()
-        self.pdf_extractor_llama = PDFExtractorLlama()
-        self.pdf_extractor_marker = PDFExtractorMarker()
+        # self.pdf_extractor_pymupdf = PDFExtractorPyMuPDF()
+        # self.pdf_extractor_llama = PDFExtractorLlama()
+        # self.pdf_extractor_marker = PDFExtractorMarker()
         self.data_processor = DataProcessor()
         self.text_chunker = TextChunker()
-        self.vector_store = VectorStoreService(persist_directory)
+        self.vector_store = VectorStoreService(persist_directory)  # None = in-memory
 
 
     def process_pdf_for_rag(self, pdf_path: str, doc_id: str):
@@ -38,21 +39,21 @@ class RAGService:
         """
         # 1. Extract: PDF에서 Raw 데이터 추출
         print(f"🔍 PDF 추출 시작: {pdf_path}")
-        # raw_content = self.pdf_extractor.extract_content(pdf_path)
+        raw_content = self.pdf_extractor.extract_content(pdf_path)
         # raw_content = self.pdf_extractor_pymupdf.extract_content(pdf_path)
         # raw_content = self.pdf_extractor_llama.extract_content(pdf_path)
-        raw_content = self.pdf_extractor_marker.extract_content(pdf_path)
+        # raw_content = self.pdf_extractor_marker.extract_content(pdf_path)
         
         # (디버깅용) 추출된 표 데이터 엑셀 저장
-        self.save_tables_to_excel(raw_content)
+        # self.save_tables_to_excel(raw_content)
         
         # 2. Transform: 데이터 정제 및 마크다운 변환
         print("🧹 데이터 정제 및 변환 중...")
         processed_docs = self.data_processor.process_content(raw_content)
         
-        # 3. Load (Temporary): 파일로 저장 (추후 Vector DB 저장으로 변경)
+        # 3. 마크다운 문서 생성 (파일 저장 없이 메모리에서만 처리)
         final_rag_document = "\n\n".join(processed_docs)
-        self.save_rag_document_as_md(pdf_path, final_rag_document)
+        # 파일 저장 제거: self.save_rag_document_as_md(pdf_path, final_rag_document)
         
         # 4. Chunking: 텍스트 청킹
         print("🔪 텍스트 청킹 중...")
@@ -80,10 +81,20 @@ class RAGService:
         :param doc_id: 특정 문서에서만 검색하려면 ID 지정
         """
         print(f"🤔 질문 분석 중: {question} (doc_id: {doc_id})")
+        # 1회 질문 비용 계산 (정확한 계산):
+        # - 질문: 약 50 토큰
+        # - 검색된 컨텍스트 (k=2): 청크 2개 × 250 토큰 = 약 500 토큰
+        # - 시스템 프롬프트: 약 50 토큰
+        # - 총 입력: 약 600 토큰
+        # - 출력: 80 토큰
+        # - OpenAI gpt-4o-mini 가격: Input $0.15/1M tokens, Output $0.60/1M tokens
+        # - 비용: (600/1,000,000 × $0.15) + (200/1,000,000 × $0.60) = $0.00009 + $0.00012 = $0.00021 (약 0.27원)
+        # - 한 달 10,000원 예산: 하루 약 1,200개 질문 가능 (여전히 충분!)
         
         # 1. Retrieve: 관련 문서 검색 (필터 적용)
+        # 비용 절감: k=2로 줄여서 입력 토큰 감소
         filter_condition = {"doc_id": str(doc_id)} if doc_id else None
-        related_docs = self.vector_store.search(query=question, k=5, filter=filter_condition) 
+        related_docs = self.vector_store.search(query=question, k=2, filter=filter_condition) 
         
         if not related_docs:
             return "죄송합니다. 해당 공고문에서 관련 정보를 찾을 수 없습니다."
@@ -91,27 +102,23 @@ class RAGService:
         # 2. Augment: 프롬프트 구성
         context = "\n\n".join([doc.page_content for doc in related_docs])
         
-        system_prompt = f"""
-        당신은 아파트 청약 공고문을 전문적으로 분석하여 사용자에게 정보를 제공하는 AI 어시스턴트입니다.
-        아래 제공된 [공고문 내용]을 바탕으로 사용자의 질문에 정확하고 친절하게 답변해 주세요.
-        
-        - [공고문 내용]에 없는 정보라면, 추측하지 말고 "공고문 내용에서 관련 정보를 찾을 수 없습니다."라고 답변하세요.
-        - 답변은 핵심 내용을 요약하여 이해하기 쉽게 설명하세요.
-        - 표 형식의 데이터가 있다면 필요 시 표나 리스트 형태로 정리해서 보여주세요.
+        # 비용 절감: 프롬프트 간소화
+        system_prompt = f"""아파트 청약 공고문 전문 분석 AI입니다. 아래 내용만 참고하여 질문에 답변하세요. 없는 정보는 "찾을 수 없습니다"라고 답변하세요.
 
-        [공고문 내용]
-        {context}
-        """
+[공고문 내용]
+{context}
+"""
 
         # 3. Generate: 답변 생성
         try:
             response = openai.chat.completions.create(
-                model="gpt-4o-mini", # 가성비 좋은 모델 사용 (필요 시 gpt-4o 변경 가능)
+                model="gpt-4o-mini", # 가성비 좋은 모델 사용
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": question}
                 ],
                 temperature=0, # 사실 기반 답변을 위해 0 설정
+                max_tokens=200,  # 답변 길이 확장 (80 → 200, 완전한 답변 제공)
             )
             return response.choices[0].message.content
         except Exception as e:

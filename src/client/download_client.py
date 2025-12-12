@@ -17,5 +17,3 @@ class ApplyhomeDownloadClient:
             return response.content
         else:
             return None
-            
-        return None
