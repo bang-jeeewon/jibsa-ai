@@ -24,6 +24,6 @@ ENV PYTHONUNBUFFERED=1
 ENV FLASK_APP=src.app:app
 
 # Render는 $PORT 환경 변수를 자동으로 제공하므로 이를 사용
-# 쉘 형식으로 작성하여 환경 변수 치환 가능하게 함
-CMD gunicorn src.app:app --bind 0.0.0.0:${PORT} --workers 2 --threads 4 --timeout 120
+# 쉘을 통해 실행하여 환경 변수 치환 보장
+CMD ["/bin/sh", "-c", "gunicorn src.app:app --bind 0.0.0.0:${PORT:-10000} --workers 2 --threads 4 --timeout 120"]
 
