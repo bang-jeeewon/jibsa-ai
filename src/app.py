@@ -18,18 +18,33 @@ from src.client.api_client import ApplyhomeAPIClient # 클라이언트 추가
 # Flask 앱 인스턴스
 app = Flask(__name__, template_folder='../templates')
 
-# 서비스 전역 인스턴스 (초기화 에러 방지를 위해 try-except 사용)
-try:
-    crawl_url_service = CrawlUrlService()
-    download_pdf_service = DownloadPdfService()
-    rag_service = RAGService()
-    api_client = ApplyhomeAPIClient() # API 클라이언트 초기화
-except Exception as e:
-    print(f"⚠️ 서비스 초기화 중 에러 발생 (앱은 계속 실행됩니다): {e}")
-    crawl_url_service = None
-    download_pdf_service = None
-    rag_service = None
-    api_client = None
+# 서비스 전역 인스턴스 (지연 초기화 - 앱 시작 속도 향상)
+crawl_url_service = None
+download_pdf_service = None
+rag_service = None
+api_client = None
+
+def init_services():
+    """서비스를 지연 초기화 (앱 시작 후 백그라운드에서 초기화)"""
+    global crawl_url_service, download_pdf_service, rag_service, api_client
+    if crawl_url_service is None:
+        try:
+            print("🔄 서비스 초기화 시작...")
+            crawl_url_service = CrawlUrlService()
+            download_pdf_service = DownloadPdfService()
+            rag_service = RAGService()
+            api_client = ApplyhomeAPIClient()
+            print("✅ 서비스 초기화 완료")
+        except Exception as e:
+            print(f"⚠️ 서비스 초기화 중 에러 발생: {e}")
+            crawl_url_service = None
+            download_pdf_service = None
+            rag_service = None
+            api_client = None
+
+# 앱 시작 시 서비스 초기화 (백그라운드)
+import threading
+threading.Thread(target=init_services, daemon=True).start()
 
 
 
@@ -52,6 +67,10 @@ def index():
 @app.route('/api/analyze', methods=['POST'])
 def analyze_apt():
     """특정 공고 분석 요청 처리 (PDF 다룬로드 및 분석)"""
+    # 서비스 초기화 확인
+    if crawl_url_service is None or download_pdf_service is None or rag_service is None:
+        return jsonify({"status": "error", "message": "서비스가 아직 초기화 중입니다. 잠시 후 다시 시도해주세요."}), 503
+    
     data = request.json 
     pblanc_url = data.get('pblanc_url') # 모집공고 상세 URL
     house_manage_no = data.get('house_manage_no') # 주택관리번호
@@ -93,6 +112,10 @@ def analyze_apt():
 @app.route('/api/query', methods=['POST'])
 def query():
     """챗봇 질의응답"""
+    # 서비스 초기화 확인
+    if rag_service is None:
+        return jsonify({"answer": "서비스가 아직 초기화 중입니다. 잠시 후 다시 시도해주세요."}), 503
+    
     data = request.json
     question = data.get('question', '')
     house_manage_no = data.get('house_manage_no') # 프론트에서 전달받은 공고 ID
@@ -113,6 +136,10 @@ def query():
 @app.route('/api/reset', methods=['POST'])
 def reset_db():
     """벡터 DB 초기화"""
+    # 서비스 초기화 확인
+    if rag_service is None:
+        return jsonify({"status": "error", "message": "서비스가 아직 초기화 중입니다."}), 503
+    
     try:
         rag_service.clear_database()
         return jsonify({"status": "success", "message": "DB가 초기화되었습니다."})
@@ -131,6 +158,10 @@ def get_calendar_data():
     
     print(f"📅 캘린더 데이터 요청: {start_str} ~ {end_str}")
 
+    # 서비스 초기화 확인
+    if api_client is None:
+        return jsonify([])
+    
     try:
         # 민영(01) + 국민(03) 데이터를 모두 가져와야 함 (필요하다면)
         # 일단 기본은 '01'(민영)만 가져오거나, 두 번 호출해서 합칠 수도 있음.
