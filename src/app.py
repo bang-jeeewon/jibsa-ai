@@ -10,11 +10,18 @@ from src.client.api_client import ApplyhomeAPIClient # 클라이언트 추가
 # Flask 앱 인스턴스
 app = Flask(__name__, template_folder='../templates')
 
-# 서비스 전역 인스턴스
-crawl_url_service = CrawlUrlService()
-download_pdf_service = DownloadPdfService()
-rag_service = RAGService()
-api_client = ApplyhomeAPIClient() # API 클라이언트 초기화
+# 서비스 전역 인스턴스 (초기화 에러 방지를 위해 try-except 사용)
+try:
+    crawl_url_service = CrawlUrlService()
+    download_pdf_service = DownloadPdfService()
+    rag_service = RAGService()
+    api_client = ApplyhomeAPIClient() # API 클라이언트 초기화
+except Exception as e:
+    print(f"⚠️ 서비스 초기화 중 에러 발생 (앱은 계속 실행됩니다): {e}")
+    crawl_url_service = None
+    download_pdf_service = None
+    rag_service = None
+    api_client = None
 
 
 
