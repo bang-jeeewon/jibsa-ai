@@ -222,4 +222,13 @@ if __name__ == '__main__':
     # 0.0.0.0으로 설정하여 모든 인터페이스에서 접속 허용
     # Render에서는 PORT 환경변수를 사용, 없으면 기본값 10000
     port = int(os.getenv('PORT', 10000))
-    app.run(host='0.0.0.0', port=port, debug=True, use_reloader=False)
+    print(f"🚀 Flask 앱 시작 중... 포트: {port}, 호스트: 0.0.0.0")
+    print(f"📁 작업 디렉토리: {os.getcwd()}")
+    print(f"📁 프로젝트 루트: {project_root}")
+    try:
+        app.run(host='0.0.0.0', port=port, debug=True, use_reloader=False)
+    except Exception as e:
+        print(f"❌ 앱 시작 실패: {e}")
+        import traceback
+        traceback.print_exc()
+        raise
