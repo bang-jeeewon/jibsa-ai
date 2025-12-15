@@ -1,7 +1,15 @@
 from flask import Flask, jsonify, render_template, request
 import json
 import os
+import sys
+from pathlib import Path
 from datetime import datetime, timedelta
+
+# 프로젝트 루트를 sys.path에 추가 (Render 배포 시 경로 문제 해결)
+project_root = Path(__file__).parent.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+
 from src.services.crawl_url import CrawlUrlService
 from src.services.download_pdf import DownloadPdfService
 from src.services.rag_service import RAGService
