@@ -17,3 +17,7 @@ if __name__ == '__main__':
     print(f"📁 작업 디렉토리: {os.getcwd()}")
     app.run(host='0.0.0.0', port=port, debug=False)
 
+# python test_app.py -> can't open file '/opt/render/project/src/test_app.py': [Errno 2] No such file or directory
+# python -m src.test_app -> 로컬이랑 똑같이 실행 -> 배포 성공  
+# gunicorn src.test_app:app
+# gunicorn src.test_app:app --bind 0.0.0.0:${PORT:-10000}

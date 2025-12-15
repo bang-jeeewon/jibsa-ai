@@ -10,11 +10,6 @@ project_root = Path(__file__).parent.parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
-from src.services.crawl_url import CrawlUrlService
-from src.services.download_pdf import DownloadPdfService
-from src.services.rag_service import RAGService
-from src.client.api_client import ApplyhomeAPIClient # 클라이언트 추가
-
 # Flask 앱 인스턴스
 app = Flask(__name__, template_folder='../templates')
 
@@ -24,12 +19,19 @@ download_pdf_service = None
 rag_service = None
 api_client = None
 
+
 def init_services():
     """서비스를 지연 초기화 (앱 시작 후 백그라운드에서 초기화)"""
     global crawl_url_service, download_pdf_service, rag_service, api_client
     if crawl_url_service is None:
         try:
             print("🔄 서비스 초기화 시작...")
+            # 무거운 의존성 로드를 초기화 시점으로 미룸
+            from src.services.crawl_url import CrawlUrlService
+            from src.services.download_pdf import DownloadPdfService
+            from src.services.rag_service import RAGService
+            from src.client.api_client import ApplyhomeAPIClient
+
             crawl_url_service = CrawlUrlService()
             download_pdf_service = DownloadPdfService()
             rag_service = RAGService()
