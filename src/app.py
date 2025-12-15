@@ -62,9 +62,24 @@ def analyze_apt():
 
     # 3. RAG 서비스에 PDF 등록 (ETF 구조)
     # house_manage_no를 문서 ID로 사용하여 메타데이터 저장
-    rag_service.process_pdf_for_rag(pdf_path=pdf_path, doc_id=str(house_manage_no))
-    
-    return jsonify({"status": "success", "message": "PDF 등록 완료"})
+    try:
+        rag_service.process_pdf_for_rag(pdf_path=pdf_path, doc_id=str(house_manage_no))
+        
+        # 4. RAG 처리 완료 후 임시 PDF 파일 삭제
+        if os.path.exists(pdf_path):
+            os.remove(pdf_path)
+            print(f"🗑️ 임시 PDF 파일 삭제 완료: {pdf_path}")
+        
+        return jsonify({"status": "success", "message": "PDF 등록 완료"})
+    except Exception as e:
+        # 에러 발생 시에도 임시 파일 삭제 시도
+        if os.path.exists(pdf_path):
+            try:
+                os.remove(pdf_path)
+                print(f"🗑️ 에러 발생 후 임시 PDF 파일 삭제 완료: {pdf_path}")
+            except:
+                pass
+        raise e
 
 
 @app.route('/api/query', methods=['POST'])
@@ -166,4 +181,6 @@ def get_calendar_data():
 if __name__ == '__main__':
     # Windows에서 소켓 오류 방지를 위해 use_reloader=False 설정
     # 0.0.0.0으로 설정하여 모든 인터페이스에서 접속 허용
-    app.run(host='0.0.0.0', port=5000, debug=True, use_reloader=False)
+    # Render에서는 PORT 환경변수를 사용, 없으면 기본값 10000
+    port = int(os.getenv('PORT', 10000))
+    app.run(host='0.0.0.0', port=port, debug=True, use_reloader=False)
