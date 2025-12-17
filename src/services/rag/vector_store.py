@@ -1,5 +1,5 @@
 from langchain_openai import OpenAIEmbeddings
-from langchain_huggingface import HuggingFaceEmbeddings
+# from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
 
 class VectorStoreService:
@@ -9,12 +9,12 @@ class VectorStoreService:
         :param persist_directory: None이면 in-memory 모드 (파일 저장 안 함)
         """
         self.persist_directory = persist_directory
-        # self.embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
-        self.embeddings = HuggingFaceEmbeddings(
-            model_name="jhgan/ko-sroberta-multitask",
-            model_kwargs={'device': 'cpu'},
-            encode_kwargs={'normalize_embeddings': True}
-        )
+        self.embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+        # self.embeddings = HuggingFaceEmbeddings(
+        #     model_name="jhgan/ko-sroberta-multitask",
+        #     model_kwargs={'device': 'cpu'},
+        #     encode_kwargs={'normalize_embeddings': True}
+        # )
 
         # DB 초기화 (persist_directory=None이면 in-memory 모드)
         self.vector_db = Chroma(

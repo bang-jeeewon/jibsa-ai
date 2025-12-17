@@ -219,8 +219,6 @@ def get_calendar_data():
             page=1
         )
 
-        print(f"response_data: {response_data}")
-
         items = response_data.get('data', [])
         
         # 국민주택('03')도 필요하면 추가 호출해서 items에 extend
