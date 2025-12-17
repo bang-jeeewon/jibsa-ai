@@ -13,40 +13,75 @@ if str(project_root) not in sys.path:
 # Flask 앱 인스턴스
 app = Flask(__name__, template_folder='../templates')
 
-# 서비스 전역 인스턴스 (지연 초기화 - 앱 시작 속도 향상)
+# 서비스 전역 인스턴스 (지연 초기화 - 실제 사용 시점까지 로드 지연)
 crawl_url_service = None
 download_pdf_service = None
 rag_service = None
 api_client = None
 
 
-def init_services():
-    """서비스를 지연 초기화 (앱 시작 후 백그라운드에서 초기화)"""
-    global crawl_url_service, download_pdf_service, rag_service, api_client
+def get_crawl_url_service():
+    """모집공고문 URL 크롤링 서비스 지연 초기화"""
+    global crawl_url_service
     if crawl_url_service is None:
         try:
-            print("🔄 서비스 초기화 시작...")
-            # 무거운 의존성 로드를 초기화 시점으로 미룸
+            print("🔄 CrawlUrlService 초기화 시작...")
             from src.services.crawl_url import CrawlUrlService
-            from src.services.download_pdf import DownloadPdfService
-            from src.services.rag_service import RAGService
-            from src.client.api_client import ApplyhomeAPIClient
-
             crawl_url_service = CrawlUrlService()
-            download_pdf_service = DownloadPdfService()
-            rag_service = RAGService()
-            api_client = ApplyhomeAPIClient()
-            print("✅ 서비스 초기화 완료")
+            print("✅ CrawlUrlService 초기화 완료")
         except Exception as e:
-            print(f"⚠️ 서비스 초기화 중 에러 발생: {e}")
+            print(f"⚠️ CrawlUrlService 초기화 중 에러 발생: {e}")
             crawl_url_service = None
-            download_pdf_service = None
-            rag_service = None
-            api_client = None
+            raise
+    return crawl_url_service
 
-# 앱 시작 시 서비스 초기화 (백그라운드)
-import threading
-threading.Thread(target=init_services, daemon=True).start()
+
+def get_download_pdf_service():
+    """PDF 다운로드 서비스 지연 초기화"""
+    global download_pdf_service
+    if download_pdf_service is None:
+        try:
+            print("🔄 DownloadPdfService 초기화 시작...")
+            from src.services.download_pdf import DownloadPdfService
+            download_pdf_service = DownloadPdfService()
+            print("✅ DownloadPdfService 초기화 완료")
+        except Exception as e:
+            print(f"⚠️ DownloadPdfService 초기화 중 에러 발생: {e}")
+            download_pdf_service = None
+            raise
+    return download_pdf_service
+
+
+def get_rag_service():
+    """RAG 서비스 지연 초기화 (가장 무거운 부분이므로 실제로 필요할 때만 로드)"""
+    global rag_service
+    if rag_service is None:
+        try:
+            print("🔄 RAGService 초기화 시작...")
+            from src.services.rag_service import RAGService
+            rag_service = RAGService()
+            print("✅ RAGService 초기화 완료")
+        except Exception as e:
+            print(f"⚠️ RAGService 초기화 중 에러 발생: {e}")
+            rag_service = None
+            raise
+    return rag_service
+
+
+def get_api_client():
+    """캘린더/분양정보 조회용 API 클라이언트 지연 초기화"""
+    global api_client
+    if api_client is None:
+        try:
+            print("🔄 ApplyhomeAPIClient 초기화 시작...")
+            from src.client.api_client import ApplyhomeAPIClient
+            api_client = ApplyhomeAPIClient()
+            print("✅ ApplyhomeAPIClient 초기화 완료")
+        except Exception as e:
+            print(f"⚠️ ApplyhomeAPIClient 초기화 중 에러 발생: {e}")
+            api_client = None
+            raise
+    return api_client
 
 
 
@@ -69,10 +104,14 @@ def index():
 @app.route('/api/analyze', methods=['POST'])
 def analyze_apt():
     """특정 공고 분석 요청 처리 (PDF 다룬로드 및 분석)"""
-    # 서비스 초기화 확인
-    if crawl_url_service is None or download_pdf_service is None or rag_service is None:
-        return jsonify({"status": "error", "message": "서비스가 아직 초기화 중입니다. 잠시 후 다시 시도해주세요."}), 503
-    
+    # 서비스 지연 초기화
+    try:
+        crawl_service = get_crawl_url_service()
+        download_service = get_download_pdf_service()
+        rag = get_rag_service()
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"서비스 초기화 중 오류가 발생했습니다: {e}"}), 500
+
     data = request.json 
     pblanc_url = data.get('pblanc_url') # 모집공고 상세 URL
     house_manage_no = data.get('house_manage_no') # 주택관리번호
@@ -80,19 +119,19 @@ def analyze_apt():
     house_secd = data.get('house_secd') # 주택구분코드
 
     # 1. 모집공고문 다운로드 URL 크롤링
-    download_url = crawl_url_service.crawl_url(pblanc_url=pblanc_url)
+    download_url = crawl_service.crawl_url(pblanc_url=pblanc_url)
     if not download_url:
         return jsonify({"status": "error", "message": "모집공고문 다운로드 URL 크롤링 실패"}), 500
 
     # 2. 모집공고문 PDF 다운로드
-    pdf_path = download_pdf_service.download_pdf(download_url=download_url, file_name=f"{house_manage_no}_{pblanc_no}_{house_secd}.pdf")
+    pdf_path = download_service.download_pdf(download_url=download_url, file_name=f"{house_manage_no}_{pblanc_no}_{house_secd}.pdf")
     if not pdf_path:
         return jsonify({"status": "error", "message": "모집공고문 PDF 다운로드 실패"}), 500
 
     # 3. RAG 서비스에 PDF 등록 (ETF 구조)
     # house_manage_no를 문서 ID로 사용하여 메타데이터 저장
     try:
-        rag_service.process_pdf_for_rag(pdf_path=pdf_path, doc_id=str(house_manage_no))
+        rag.process_pdf_for_rag(pdf_path=pdf_path, doc_id=str(house_manage_no))
         
         # 4. RAG 처리 완료 후 임시 PDF 파일 삭제
         if os.path.exists(pdf_path):
@@ -114,10 +153,11 @@ def analyze_apt():
 @app.route('/api/query', methods=['POST'])
 def query():
     """챗봇 질의응답"""
-    # 서비스 초기화 확인
-    if rag_service is None:
-        return jsonify({"answer": "서비스가 아직 초기화 중입니다. 잠시 후 다시 시도해주세요."}), 503
-    
+    try:
+        rag = get_rag_service()
+    except Exception as e:
+        return jsonify({"answer": f"서비스 초기화 중 오류가 발생했습니다: {e}"}), 500
+
     data = request.json
     question = data.get('question', '')
     house_manage_no = data.get('house_manage_no') # 프론트에서 전달받은 공고 ID
@@ -128,7 +168,7 @@ def query():
     # RAG 모델을 통해 답변 생성
     try:
         # doc_id 필터를 적용하여 해당 공고 내에서만 검색
-        answer = rag_service.answer_question(question, doc_id=str(house_manage_no))
+        answer = rag.answer_question(question, doc_id=str(house_manage_no))
         return jsonify({"answer": answer})
     except Exception as e:
         print(f"Error generating answer: {e}")
@@ -138,12 +178,13 @@ def query():
 @app.route('/api/reset', methods=['POST'])
 def reset_db():
     """벡터 DB 초기화"""
-    # 서비스 초기화 확인
-    if rag_service is None:
-        return jsonify({"status": "error", "message": "서비스가 아직 초기화 중입니다."}), 503
-    
     try:
-        rag_service.clear_database()
+        rag = get_rag_service()
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"서비스 초기화 중 오류가 발생했습니다: {e}"}), 500
+
+    try:
+        rag.clear_database()
         return jsonify({"status": "success", "message": "DB가 초기화되었습니다."})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
@@ -160,15 +201,18 @@ def get_calendar_data():
     
     print(f"📅 캘린더 데이터 요청: {start_str} ~ {end_str}")
 
-    # 서비스 초기화 확인
-    if api_client is None:
+    # API 클라이언트 지연 초기화
+    try:
+        client = get_api_client()
+    except Exception as e:
+        print(f"❌ /api/calendar-data에서 API 클라이언트 초기화 실패: {e}")
         return jsonify([])
-    
+
     try:
         # 민영(01) + 국민(03) 데이터를 모두 가져와야 함 (필요하다면)
         # 일단 기본은 '01'(민영)만 가져오거나, 두 번 호출해서 합칠 수도 있음.
         # 여기서는 '01'만 먼저 테스트
-        response_data = api_client.get_detail(
+        response_data = client.get_detail(
             houseDtlSecd="01", 
             start_date=start_str, 
             end_date=end_str,
@@ -176,7 +220,7 @@ def get_calendar_data():
         )
 
         print(f"response_data: {response_data}")
-        
+
         items = response_data.get('data', [])
         
         # 국민주택('03')도 필요하면 추가 호출해서 items에 extend
