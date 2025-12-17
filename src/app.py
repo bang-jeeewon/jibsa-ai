@@ -4,6 +4,9 @@ import os
 import sys
 from pathlib import Path
 from datetime import datetime, timedelta
+from src.config.config import API_BASE_URL
+
+print(f"API_BASE_URL: {API_BASE_URL}")
 
 # 프로젝트 루트를 sys.path에 추가 (Render 배포 시 경로 문제 해결)
 project_root = Path(__file__).parent.parent
