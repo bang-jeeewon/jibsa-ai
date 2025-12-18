@@ -59,7 +59,8 @@ def get_rag_service():
         try:
             print("🔄 RAGService 초기화 시작...")
             from src.services.rag_service import RAGService
-            rag_service = RAGService()
+            project_root = Path(__file__).parent.parent
+            rag_service = RAGService(persist_directory=str(project_root / "data" / "chroma_db"))
             print("✅ RAGService 초기화 완료")
         except Exception as e:
             print(f"⚠️ RAGService 초기화 중 에러 발생: {e}")
