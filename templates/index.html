@@ -171,6 +171,50 @@
         border-top: 1px solid #eee;
         display: flex;
         gap: 10px;
+        align-items: center;
+      }
+
+      .llm-selector {
+        display: flex;
+        gap: 5px;
+        margin-right: 5px;
+      }
+
+      /* 라디오 버튼 숨기기 */
+      .llm-selector input[type='radio'] {
+        display: none;
+      }
+
+      .llm-btn {
+        padding: 8px 12px;
+        background: #f0f0f0;
+        color: #666;
+        border: 2px solid #ddd;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 0.85rem;
+        font-weight: 500;
+        transition: all 0.2s;
+        display: inline-block;
+      }
+
+      .llm-btn:hover {
+        background: #e8e8e8;
+        border-color: #bbb;
+      }
+
+      /* GPT 선택됨 */
+      #radio-openai:checked + .llm-btn {
+        background: #667eea;
+        color: white;
+        border-color: #667eea;
+      }
+
+      /* Gemini 선택됨 */
+      #radio-gemini:checked + .llm-btn {
+        background: #4285f4;
+        color: white;
+        border-color: #4285f4;
       }
 
       .chat-input-area input {
@@ -181,7 +225,7 @@
         outline: none;
       }
 
-      .chat-input-area button {
+      .chat-input-area button:last-child {
         padding: 10px 20px;
         background: #667eea;
         color: white;
@@ -302,6 +346,14 @@
             </div>
 
             <div class="chat-input-area">
+              <!-- LLM 선택 라디오 버튼 -->
+              <div class="llm-selector">
+                <input type="radio" id="radio-openai" name="llm-selector" value="openai" checked onchange="selectLLM('openai')" />
+                <label for="radio-openai" class="llm-btn" title="GPT-4o-mini 사용">🤖 GPT</label>
+
+                <input type="radio" id="radio-gemini" name="llm-selector" value="gemini" onchange="selectLLM('gemini')" />
+                <label for="radio-gemini" class="llm-btn" title="Gemini Pro 사용">✨ Gemini</label>
+              </div>
               <input
                 type="text"
                 id="question-input"
@@ -339,9 +391,50 @@
           },
         });
         calendar.render();
+
+        // LLM 버튼 초기화 (확실히 하나만 선택되도록)
+        initializeLLMButtons();
       });
 
       let currentHouseManageNo = null; // 현재 선택된 공고 ID 저장
+      let selectedLLM = 'openai'; // 기본값: GPT
+
+      function initializeLLMButtons() {
+        // 라디오 버튼으로 GPT 선택 (기본값)
+        const openaiRadio = document.getElementById('radio-openai');
+        const geminiRadio = document.getElementById('radio-gemini');
+
+        if (openaiRadio && geminiRadio) {
+          openaiRadio.checked = true;
+          geminiRadio.checked = false;
+          selectedLLM = 'openai';
+          console.log('LLM 버튼 초기화 완료: GPT 선택됨');
+        }
+      }
+
+      function selectLLM(llm) {
+        const openaiRadio = document.getElementById('radio-openai');
+        const geminiRadio = document.getElementById('radio-gemini');
+
+        if (!openaiRadio || !geminiRadio) {
+          console.error('LLM 라디오 버튼을 찾을 수 없습니다.');
+          return;
+        }
+
+        // 선택된 LLM 업데이트
+        selectedLLM = llm;
+
+        // 라디오 버튼 상태 업데이트
+        if (llm === 'openai') {
+          openaiRadio.checked = true;
+          geminiRadio.checked = false;
+          console.log('LLM 선택됨: GPT-4o-mini');
+        } else if (llm === 'gemini') {
+          openaiRadio.checked = false;
+          geminiRadio.checked = true;
+          console.log('LLM 선택됨: Gemini Pro');
+        }
+      }
 
       async function handleEventClick(event) {
         const data = event.extendedProps;
@@ -388,6 +481,9 @@
           overlay.style.display = 'none';
           document.getElementById('detail-view').style.display = 'flex';
 
+          // LLM 버튼 초기화 (새로운 공고 선택 시)
+          initializeLLMButtons();
+
           // 채팅창 초기화 (새로운 공고이므로)
           const messages = document.getElementById('messages');
           messages.innerHTML = `<div class="message assistant"><strong>${event.title}</strong> 공고문 분석이 완료되었습니다.<br>무엇이든 물어보세요! (예: 1순위 자격 조건, 전매 제한 등)</div>`;
@@ -422,6 +518,7 @@
             body: JSON.stringify({
               question: question,
               house_manage_no: currentHouseManageNo, // 질문 시 ID 함께 전송
+              model: selectedLLM, // 선택된 LLM 전송
             }),
           });
           const data = await response.json();

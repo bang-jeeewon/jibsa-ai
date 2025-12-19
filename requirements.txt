@@ -1,5 +1,6 @@
 # RAG 시스템 핵심 라이브러리
 langchain-openai>=0.0.2
+langchain-google-genai>=0.0.2
 langchain-huggingface>=0.0.2
 langchain-chroma>=0.1.0
 langchain-text-splitters>=0.1.0
@@ -19,11 +20,9 @@ marker-pdf>=0.0.1
 # 벡터 데이터베이스
 chromadb>=0.4.0
 
-# 임베딩 모델 (한국어 지원)
-sentence-transformers>=2.2.0
-
 # LLM
 openai>=1.10.0
+google-genai>=0.2.0
 
 # 웹 프레임워크
 flask>=3.0.0

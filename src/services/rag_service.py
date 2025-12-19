@@ -1,7 +1,11 @@
 import pandas as pd
 from pathlib import Path
-from src.config.config import OPENAI_API_KEY
+from src.config.config import OPENAI_API_KEY, GOOGLE_API_KEY
 from openai import OpenAI
+from google.genai import Client
+import time
+import random
+import re
 
 # 분리된 모듈 import
 from src.services.rag.pdf_extractor import PDFExtractor
@@ -13,13 +17,15 @@ from src.services.rag.text_chunker import TextChunker
 from src.services.rag.vector_store import VectorStoreService
 
 openai = OpenAI(api_key=OPENAI_API_KEY)
+genai_client = Client(api_key=GOOGLE_API_KEY) 
 
 class RAGService:
-    def __init__(self, persist_directory=None):
+    def __init__(self, persist_directory=None, embedding_model="openai"):
         """
         RAG 파이프라인을 총괄하는 서비스 클래스.
         ETL 프로세스를 각 담당 클래스에게 위임하여 실행합니다.
         :param persist_directory: None이면 in-memory 모드 (파일 저장 안 함, 서버 재시작 시 데이터 사라짐)
+        :param embedding_model: 사용할 임베딩 모델 ("openai" 또는 "gemini")
         """
         # 각 단계별 담당자(Worker) 초기화
         self.pdf_extractor = PDFExtractor()
@@ -28,7 +34,7 @@ class RAGService:
         # self.pdf_extractor_marker = PDFExtractorMarker()
         self.data_processor = DataProcessor()
         self.text_chunker = TextChunker()
-        self.vector_store = VectorStoreService(persist_directory)  # None = in-memory
+        self.vector_store = VectorStoreService(persist_directory, embedding_model=embedding_model)  # None = in-memory
 
 
     def process_pdf_for_rag(self, pdf_path: str, doc_id: str):
@@ -67,20 +73,20 @@ class RAGService:
         
         # (디버깅용) 첫 번째 청크 내용 출력
         if chunks:
-            print(f"🔍 첫 번째 청크 예시:\n{chunks[0].page_content[:200]}...")
-            print(f"🔖 메타데이터: {chunks[0].metadata}")
-            
             # 5. Load: 벡터 DB 저장
             self.vector_store.add_documents(chunks)
 
         return '====처리 완료===='
 
-    def answer_question(self, question: str, doc_id: str = None):
+    def answer_question(self, question: str, doc_id: str = None, model: str = "openai"):
         """
         사용자의 질문에 대해 RAG 방식으로 답변을 생성합니다.
         :param doc_id: 특정 문서에서만 검색하려면 ID 지정
+        :param model: 사용할 모델 ("openai" 또는 "gemini")
         """
-        print(f"🤔 질문 분석 중: {question} (doc_id: {doc_id})")
+        model_display = "GPT-4o-mini" if model == "openai" else "Gemini Pro"
+        print(f"🤔 질문 분석 중: {question}")
+        print(f"📋 문서 ID: {doc_id}, 선택된 LLM: {model_display}")
         # 1회 질문 비용 계산 (k=5 기준):
         # - 질문: 약 50 토큰
         # - 검색된 컨텍스트 (k=5): 청크 5개 × 250 토큰 = 약 1,250 토큰
@@ -111,16 +117,64 @@ class RAGService:
 
         # 3. Generate: 답변 생성
         try:
-            response = openai.chat.completions.create(
-                model="gpt-4o-mini", # 가성비 좋은 모델 사용
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": question}
-                ],
-                temperature=0, # 사실 기반 답변을 위해 0 설정
-                max_tokens=500,  # 답변 길이 확장 (200 → 500, 긴 답변도 완전히 제공)
-            )
-            return response.choices[0].message.content
+            if model == "gemini":
+                # Gemini 모델 사용 (새 SDK: google-genai)
+                if not genai_client:
+                    return "GOOGLE_API_KEY가 설정되지 않아 Gemini를 사용할 수 없습니다."
+                
+                prompt = f"{system_prompt}\n\n질문: {question}"
+                
+                # 재시도 로직 (429 에러 대응)
+                max_retries = 3
+                retry_delay = 2  # 초기 대기 시간 (초)
+                
+                for attempt in range(max_retries):
+                    try:
+                        # 새 SDK 사용법
+                        response = genai_client.models.generate_content(
+                            model='gemini-2.0-flash-exp',
+                            contents=prompt,
+                            config={
+                                'temperature': 0,
+                                'max_output_tokens': 500,
+                            }
+                        )
+                        return response.text
+                        
+                    except Exception as e:
+                        error_msg = str(e)
+                        
+                        # 429 에러 처리
+                        if "429" in error_msg or "RESOURCE_EXHAUSTED" in error_msg or "quota" in error_msg.lower():
+                            if attempt < max_retries - 1:
+                                # 에러 메시지에서 retry delay 추출 시도
+                                retry_after = None
+                                retry_match = re.search(r'retry in ([\d.]+)s', error_msg, re.IGNORECASE)
+                                if retry_match:
+                                    retry_after = float(retry_match.group(1))
+                                else:
+                                    # Exponential backoff
+                                    retry_after = retry_delay * (2 ** attempt) + random.uniform(0, 1)
+                                
+                                print(f"⚠️ Gemini 할당량 초과 (429). {retry_after:.1f}초 후 재시도... ({attempt + 1}/{max_retries})")
+                                time.sleep(retry_after)
+                            else:
+                                return f"죄송합니다. Gemini API 할당량이 초과되어 답변을 생성할 수 없습니다. 잠시 후 다시 시도해주세요."
+                        else:
+                            # 다른 에러는 즉시 재발생
+                            raise
+            else:
+                # OpenAI 모델 사용 (기본값)
+                response = openai.chat.completions.create(
+                    model="gpt-4o-mini", # 가성비 좋은 모델 사용
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": question}
+                    ],
+                    temperature=0, # 사실 기반 답변을 위해 0 설정
+                    max_tokens=500,  # 답변 길이 확장 (200 → 500, 긴 답변도 완전히 제공)
+                )
+                return response.choices[0].message.content
         except Exception as e:
             return f"죄송합니다. 답변 생성 중 오류가 발생했습니다: {e}"
 
