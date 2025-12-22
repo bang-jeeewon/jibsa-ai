@@ -57,13 +57,24 @@ class RAGService:
         print("🧹 데이터 정제 및 변환 중...")
         processed_docs = self.data_processor.process_content(raw_content)
         
+        # raw_content 메모리 해제 (더 이상 필요 없음)
+        del raw_content
+        import gc
+        gc.collect()
+        
         # 3. 마크다운 문서 생성 (파일 저장 없이 메모리에서만 처리)
         final_rag_document = "\n\n".join(processed_docs)
-        # 파일 저장 제거: self.save_rag_document_as_md(pdf_path, final_rag_document)
+        # processed_docs 메모리 해제
+        del processed_docs
+        gc.collect()
         
-        # 4. Chunking: 텍스트 청킹
+        # 4. Chunking: 텍스트 청킹 (메모리 효율을 위해 배치로 처리)
         print("🔪 텍스트 청킹 중...")
         chunks = self.text_chunker.chunk_markdown(final_rag_document)
+        
+        # final_rag_document 메모리 해제 (청킹 완료 후 더 이상 필요 없음)
+        del final_rag_document
+        gc.collect()
         
         # [중요] 모든 청크에 문서 ID(doc_id) 메타데이터 추가
         for chunk in chunks:
@@ -71,10 +82,23 @@ class RAGService:
 
         print(f"✅ 총 {len(chunks)}개의 청크가 생성되었습니다.")
         
-        # (디버깅용) 첫 번째 청크 내용 출력
+        # 5. Load: 벡터 DB 저장 (배치로 처리하여 메모리 효율 향상)
         if chunks:
-            # 5. Load: 벡터 DB 저장
-            self.vector_store.add_documents(chunks)
+            # 청크를 작은 배치로 나누어 저장 (메모리 효율)
+            chunk_batch_size = 50  # 한 번에 처리할 청크 수 (메모리 제한 환경 대응)
+            total_chunks = len(chunks)
+            
+            for i in range(0, total_chunks, chunk_batch_size):
+                batch = chunks[i:i + chunk_batch_size]
+                print(f"  💾 청크 배치 저장 중... ({i+1}/{total_chunks})")
+                self.vector_store.add_documents(batch)
+                # 배치 저장 후 메모리 해제
+                del batch
+                gc.collect()
+            
+            # 모든 청크 메모리 해제
+            del chunks
+            gc.collect()
 
         return '====처리 완료===='
 

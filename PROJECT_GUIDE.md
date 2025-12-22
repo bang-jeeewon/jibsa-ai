@@ -69,8 +69,16 @@
 - **모듈**: `VectorStoreService`
 - **벡터 DB**: Chroma (LangChain 통합)
 - **저장 위치**: `persist_directory` 파라미터로 지정 (기본값: `./data/chroma_db`)
-- **임베딩 모델**: Google Generative AI (`models/gemini-embedding-001`)
-  - `GoogleGenerativeAIEmbeddings` 사용
+- **임베딩 모델**:
+  - **기본값**: OpenAI `text-embedding-3-small` (더 안정적이고 rate limit이 높음)
+  - **선택 가능**: Google Generative AI `models/gemini-embedding-001` (설정 시 사용)
+- **배치 처리**:
+  - 청크를 5개씩 묶어서 처리 (rate limit 방지)
+  - 각 배치 처리 후 4초 대기 (분당 약 15 요청 제한 준수)
+  - 예: 467개 청크 → 약 8~9분 소요
+- **재시도 로직**:
+  - 429 에러 발생 시 최대 3회 재시도 (exponential backoff)
+  - 차원 불일치 에러 시 자동으로 벡터 DB 재생성
 - **컬렉션 이름**: `apt_notices`
 - **메타데이터**: 각 청크에 `doc_id` (house_manage_no)가 메타데이터로 추가되어 특정 공고 내에서만 검색 가능하도록 구성
 - 처리 완료 후 임시 PDF 파일은 자동으로 삭제됩니다.
@@ -79,7 +87,8 @@
 
 #### 2.1 질문 입력 (`/api/query` 엔드포인트)
 
-- 사용자가 질문을 입력하면 `question`과 `house_manage_no`가 전달됩니다.
+- 사용자가 질문을 입력하면 `question`, `house_manage_no`, `model` (GPT/Gemini 선택), `conversation_history` (대화 히스토리)가 전달됩니다.
+- **대화 히스토리**: 최근 3턴(질문+답변)만 전송하여 이전 대화 맥락 유지
 
 #### 2.2 관련 문서 검색 (Retrieve)
 
@@ -101,26 +110,37 @@
   ```
   아파트 청약 공고문 전문 분석 AI입니다. 아래 내용만 참고하여 질문에 답변하세요.
   없는 정보는 "찾을 수 없습니다"라고 답변하세요.
+  이전 대화 내용을 참고하여 맥락을 이해하고 답변하세요.
 
   [공고문 내용]
   {context}
+
+  [이전 대화 내용]
+  {conversation_history}
   ```
 
 - **사용자 메시지**: 사용자가 입력한 질문
+- **대화 히스토리**: 이전 대화 내용이 있으면 프롬프트에 포함하여 맥락 유지
 
 #### 2.5 답변 생성 (Generate)
 
-- **모델**: OpenAI `gpt-4o-mini` (비용 효율적인 모델)
+- **모델 선택**: 사용자가 GPT 또는 Gemini 중 선택 가능
+  - **GPT-4o-mini** (기본값): 비용 효율적, 안정적, 대화 히스토리를 `messages` 배열로 관리
+  - **Gemini Pro**: 무료 티어 제공, 대화 히스토리를 프롬프트 텍스트에 포함
 - **파라미터**:
   - `temperature=0`: 사실 기반 답변을 위해 일관성 유지
   - `max_tokens=500`: 답변 길이 제한
+- **재시도 로직**:
+  - 429 에러 발생 시 최대 3회 재시도
+  - 에러 메시지에서 retry delay 추출하여 대기
 - 생성된 답변을 사용자에게 반환합니다.
 
-|구분| OpenAI| Google| Generative AI|
-|플랫폼/회사 |OpenAI |Google AI Studio|
-|Python 패키지| openai |google-generativeai|
-|초기화 방식| 클라이언트 객체 생성| configure() 함수 사용|
-|사용 예시 |OpenAI(api_key=...) |genai.configure(api_key=...)|
+| 구분          | OpenAI               | Google Generative AI         |
+| ------------- | -------------------- | ---------------------------- |
+| 플랫폼/회사   | OpenAI               | Google AI Studio             |
+| Python 패키지 | openai               | google-generativeai          |
+| 초기화 방식   | 클라이언트 객체 생성 | configure() 함수 사용        |
+| 사용 예시     | OpenAI(api_key=...)  | genai.configure(api_key=...) |
 
 ## 📁 프로젝트 구조
 
@@ -161,8 +181,12 @@ ai/
 
 ### AI/ML
 
-- **Google Generative AI**: 텍스트 임베딩 (`gemini-embedding-001`)
-- **OpenAI**: LLM 답변 생성 (`gpt-4o-mini`)
+- **임베딩 모델**:
+  - **OpenAI** `text-embedding-3-small` (기본값, 1536 차원): 더 안정적이고 rate limit이 높음
+  - **Google Generative AI** `gemini-embedding-001` (선택 시, 3072 차원): 무료 티어 제공
+- **LLM 답변 생성**:
+  - **OpenAI** `gpt-4o-mini` (기본값): 비용 효율적, 안정적
+  - **Google Gemini** `gemini-2.0-flash-exp` (선택 시): 무료 티어 제공
 
 ### 데이터 처리
 
@@ -184,6 +208,13 @@ ai/
    - 프롬프트 간소화
 4. **지연 초기화**: 무거운 서비스(RAG, 크롤링 등)는 실제 사용 시점에만 초기화하여 서버 시작 시간 단축
 5. **임시 파일 관리**: PDF 처리 후 자동 삭제하여 디스크 공간 절약
+6. **배치 처리 및 Rate Limit 방지**:
+   - 임베딩 API 호출을 5개씩 배치로 처리
+   - 배치 간 4초 대기로 rate limit 준수
+   - 429 에러 발생 시 자동 재시도 (최대 3회)
+7. **대화 히스토리 지원**: 이전 대화 내용을 참고하여 맥락을 유지한 답변 생성
+8. **임베딩 모델 선택**: OpenAI(기본값) 또는 Gemini 임베딩 선택 가능
+9. **LLM 모델 선택**: 사용자가 GPT 또는 Gemini 중 선택 가능 (프론트엔드 라디오 버튼)
 
 ## 🔄 API 엔드포인트
 
@@ -220,7 +251,12 @@ ai/
 ```json
 {
   "question": "공급대상은 무엇인가요?",
-  "house_manage_no": "2025000486"
+  "house_manage_no": "2025000486",
+  "model": "openai",
+  "conversation_history": [
+    { "role": "user", "content": "전매제한 기간은?" },
+    { "role": "assistant", "content": "전매제한 기간은 10년입니다." }
+  ]
 }
 ```
 
@@ -262,10 +298,10 @@ ai/
 ✅ PDF에서 텍스트와 표 데이터를 추출  
 ✅ 추출된 raw content를 정제해서 markdown으로 변환  
 ✅ Markdown의 header를 기준으로 청크 생성  
-✅ 벡터 DB(Chroma)에 청크 저장, `persist_directory` 사용, Google GenAI 임베딩 사용  
+✅ 벡터 DB(Chroma)에 청크 저장, `persist_directory` 사용  
 ✅ 유저 질문 입력 시 벡터 DB에서 관련 문서 검색  
 ✅ 검색된 문서로 context 생성 후 프롬프트 구성  
-✅ OpenAI GPT-4o-mini 모델로 답변 생성
+✅ GPT-4o-mini 또는 Gemini Pro 모델로 답변 생성 (사용자 선택)
 
 **추가로 확인된 세부사항**:
 
@@ -274,6 +310,11 @@ ai/
 - 청크에 메타데이터로 `doc_id` 추가
 - 2차 청킹(RecursiveCharacterTextSplitter)으로 긴 청크 추가 분할
 - 비용 최적화를 위한 청크 크기 및 모델 선택
+- **배치 처리**: 청크를 5개씩 묶어서 처리하고 배치 간 4초 대기 (rate limit 방지)
+- **재시도 로직**: 429 에러 발생 시 자동 재시도 (최대 3회)
+- **차원 불일치 처리**: 임베딩 모델 변경 시 자동으로 벡터 DB 재생성
+- **대화 히스토리**: 이전 대화 내용을 참고하여 맥락 유지
+- **임베딩 모델 선택**: OpenAI(기본값, 1536차원) 또는 Gemini(3072차원) 선택 가능
 
 ## 🚀 실행 방법
 
