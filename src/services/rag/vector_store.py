@@ -2,7 +2,7 @@ from langchain_openai import OpenAIEmbeddings
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 # from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
-from src.config.config import OPENAI_API_KEY, GOOGLE_API_KEY
+from src.config.config import OPENAI_API_KEY, GOOGLE_API_KEY, RENDER
 import time
 import random
 
@@ -20,6 +20,7 @@ class VectorStoreService:
             # GoogleGenerativeAIEmbeddings에 재시도 로직이 내장되어 있지만, 추가 설정 가능
             self.embeddings = GoogleGenerativeAIEmbeddings(
                 model="models/gemini-embedding-001",
+                google_api_key=GOOGLE_API_KEY,  # API 키 명시적으로 전달
                 # rate limit 방지를 위한 추가 설정
                 request_options={"timeout": 60}  # 타임아웃 설정
             )
@@ -56,19 +57,26 @@ class VectorStoreService:
         max_retries = 3
         retry_delay = 2  # 초기 대기 시간 (초)
         
+        # Render 환경인지 확인 (로컬에서는 한 번에 처리, Render에서는 배치 처리)
+        is_render = RENDER == "true" or RENDER == "1"
+        
         for attempt in range(max_retries):
             try:
-                # 청크를 작은 배치로 나누어 처리 (rate limit 방지)
-                # Gemini API 무료 티어: 분당 약 15-60 요청 제한 (모델에 따라 다름)
-                batch_size = 5  # 한 번에 처리할 청크 수 (더 작게)
-                for i in range(0, len(chunks), batch_size):
-                    batch = chunks[i:i + batch_size]
-                    self.vector_db.add_documents(batch)
-                    # 배치 간 대기 (rate limit 방지) - 분당 15 요청 기준으로 약 4초 간격
-                    if i + batch_size < len(chunks):
-                        wait_time = 4.0  # 4초 대기 (분당 15 요청 = 4초당 1 요청)
-                        print(f"  배치 {i//batch_size + 1} 완료. {wait_time}초 대기 중... (rate limit 방지)")
-                        time.sleep(wait_time)
+                if is_render:
+                    # Render 환경: 작은 배치로 나누어 처리 (rate limit 방지)
+                    # Gemini API 무료 티어: 분당 약 15-60 요청 제한 (모델에 따라 다름)
+                    batch_size = 5  # 한 번에 처리할 청크 수 (더 작게)
+                    for i in range(0, len(chunks), batch_size):
+                        batch = chunks[i:i + batch_size]
+                        self.vector_db.add_documents(batch)
+                        # 배치 간 대기 (rate limit 방지) - 분당 15 요청 기준으로 약 4초 간격
+                        if i + batch_size < len(chunks):
+                            wait_time = 4.0  # 4초 대기 (분당 15 요청 = 4초당 1 요청)
+                            print(f"  배치 {i//batch_size + 1} 완료. {wait_time}초 대기 중... (rate limit 방지)")
+                            time.sleep(wait_time)
+                else:
+                    # 로컬 환경: 한 번에 처리
+                    self.vector_db.add_documents(chunks)
                 
                 print("✅ 벡터 DB 저장 완료!")
                 return

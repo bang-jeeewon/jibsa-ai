@@ -134,15 +134,27 @@ def analyze_apt():
     try:
         rag.process_pdf_for_rag(pdf_path=pdf_path, doc_id=str(house_manage_no))
         
-        # 4. RAG 처리 완료 후 임시 PDF 파일 삭제
-        if os.path.exists(pdf_path):
-            os.remove(pdf_path)
-            print(f"🗑️ 임시 PDF 파일 삭제 완료: {pdf_path}")
+        # 4. RAG 처리 완료 후 임시 PDF 파일 삭제 (Render 환경에서만)
+        # 로컬 환경에서는 PDF를 tmp/pdfs/에 보관
+        from src.config.config import RENDER
+        is_render = RENDER == "true" or RENDER == "1"
+        
+        if is_render:
+            # Render 환경: 임시 파일 삭제
+            if os.path.exists(pdf_path):
+                os.remove(pdf_path)
+                print(f"🗑️ 임시 PDF 파일 삭제 완료: {pdf_path}")
+        else:
+            # 로컬 환경: PDF 보관 (이미 tmp/pdfs/에 저장되어 있음)
+            print(f"💾 PDF 파일 보관: {pdf_path}")
         
         return jsonify({"status": "success", "message": "PDF 등록 완료"})
     except Exception as e:
-        # 에러 발생 시에도 임시 파일 삭제 시도
-        if os.path.exists(pdf_path):
+        # 에러 발생 시에도 Render 환경에서만 임시 파일 삭제 시도
+        from src.config.config import RENDER
+        is_render = RENDER == "true" or RENDER == "1"
+        
+        if is_render and os.path.exists(pdf_path):
             try:
                 os.remove(pdf_path)
                 print(f"🗑️ 에러 발생 후 임시 PDF 파일 삭제 완료: {pdf_path}")

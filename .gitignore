@@ -2,6 +2,7 @@
 __pycache__/
 
 data/chroma_db/*
+data/md/*
 
 .env
 

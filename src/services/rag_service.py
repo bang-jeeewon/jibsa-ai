@@ -1,6 +1,6 @@
 import pandas as pd
 from pathlib import Path
-from src.config.config import OPENAI_API_KEY, GOOGLE_API_KEY
+from src.config.config import OPENAI_API_KEY, GOOGLE_API_KEY, CHUNK_BATCH_SIZE, RENDER
 from openai import OpenAI
 from google.genai import Client
 import time
@@ -62,8 +62,15 @@ class RAGService:
         import gc
         gc.collect()
         
-        # 3. 마크다운 문서 생성 (파일 저장 없이 메모리에서만 처리)
+        # 3. 마크다운 문서 생성
         final_rag_document = "\n\n".join(processed_docs)
+        
+        # 로컬 환경에서만 마크다운 파일 저장
+        is_render = RENDER == "true" or RENDER == "1"
+        if not is_render:
+            # 로컬 환경: data/md/에 마크다운 저장
+            self.save_rag_document_as_md(pdf_path, final_rag_document)
+        
         # processed_docs 메모리 해제
         del processed_docs
         gc.collect()
@@ -82,19 +89,37 @@ class RAGService:
 
         print(f"✅ 총 {len(chunks)}개의 청크가 생성되었습니다.")
         
-        # 5. Load: 벡터 DB 저장 (배치로 처리하여 메모리 효율 향상)
+        # 5. Load: 벡터 DB 저장
         if chunks:
-            # 청크를 작은 배치로 나누어 저장 (메모리 효율)
-            chunk_batch_size = 50  # 한 번에 처리할 청크 수 (메모리 제한 환경 대응)
-            total_chunks = len(chunks)
+            # Render 환경인지 확인 (환경 변수로 구분)
+            # CHUNK_BATCH_SIZE가 명시적으로 설정되어 있으면 그 값을 사용
+            # 없으면 RENDER 환경 변수를 확인하여 결정
+            chunk_batch_size_env = CHUNK_BATCH_SIZE
             
-            for i in range(0, total_chunks, chunk_batch_size):
-                batch = chunks[i:i + chunk_batch_size]
-                print(f"  💾 청크 배치 저장 중... ({i+1}/{total_chunks})")
-                self.vector_store.add_documents(batch)
-                # 배치 저장 후 메모리 해제
-                del batch
-                gc.collect()
+            if chunk_batch_size_env is not None:
+                # 명시적으로 설정된 경우
+                chunk_batch_size = int(chunk_batch_size_env)
+            else:
+                # 환경 변수가 없으면 RENDER 환경 확인
+                is_render = RENDER == "true" or RENDER == "1"
+                chunk_batch_size = 50 if is_render else 0  # Render면 50, 로컬이면 0 (한 번에 처리)
+            
+            # 배치 크기가 0이거나 청크 개수보다 크면 한 번에 처리 (로컬 환경)
+            if chunk_batch_size == 0 or chunk_batch_size >= len(chunks):
+                print(f"  💾 청크 저장 중... (한 번에 {len(chunks)}개)")
+                self.vector_store.add_documents(chunks)
+            else:
+                # Render 환경: 배치로 나누어 저장 (메모리 효율)
+                total_chunks = len(chunks)
+                print(f"  💾 청크 배치 저장 중... (배치 크기: {chunk_batch_size})")
+                
+                for i in range(0, total_chunks, chunk_batch_size):
+                    batch = chunks[i:i + chunk_batch_size]
+                    print(f"    배치 {i//chunk_batch_size + 1}/{(total_chunks + chunk_batch_size - 1)//chunk_batch_size} 저장 중...")
+                    self.vector_store.add_documents(batch)
+                    # 배치 저장 후 메모리 해제
+                    del batch
+                    gc.collect()
             
             # 모든 청크 메모리 해제
             del chunks
@@ -122,18 +147,41 @@ class RAGService:
         # - 한 달 10,000원 예산: 하루 약 512개 질문 가능 (여전히 충분!)
         
         # 1. Retrieve: 관련 문서 검색 (필터 적용)
-        # k=5로 설정하여 더 많은 컨텍스트 제공 (정확도 향상)
+        # k=10으로 증가하여 표 데이터 등 다양한 형식의 정보도 포함
         filter_condition = {"doc_id": str(doc_id)} if doc_id else None
-        related_docs = self.vector_store.search(query=question, k=5, filter=filter_condition) 
+        related_docs = self.vector_store.search(query=question, k=10, filter=filter_condition) 
         
         if not related_docs:
-            return "죄송합니다. 해당 공고문에서 관련 정보를 찾을 수 없습니다."
+            print("⚠️ 검색된 문서가 없습니다. 벡터 DB에 데이터가 저장되어 있는지 확인해주세요.")
+            return "죄송합니다. 해당 공고문에서 관련 정보를 찾을 수 없습니다. 먼저 공고문을 분석해주세요."
 
         # 2. Augment: 프롬프트 구성
         context = "\n\n".join([doc.page_content for doc in related_docs])
         
-        # 비용 절감: 프롬프트 간소화
-        system_prompt = f"""아파트 청약 공고문 전문 분석 AI입니다. 아래 내용만 참고하여 질문에 답변하세요. 없는 정보는 "찾을 수 없습니다"라고 답변하세요.
+        # 디버깅: 검색된 문서 정보 출력
+        print(f"📄 검색된 문서 개수: {len(related_docs)}")
+        print(f"❓ 질문: {question}")
+        for i, doc in enumerate(related_docs, 1):
+            preview = doc.page_content[:300].replace('\n', ' ')
+            print(f"  문서 {i} (미리보기): {preview}...")
+        
+        # 프롬프트 구성 (더 명확한 지시사항)
+        system_prompt = f"""당신은 아파트 청약 공고문을 전문적으로 분석하는 AI 어시스턴트입니다.
+
+아래 [공고문 내용] 섹션에 있는 정보를 **철저히 검토**하여 사용자의 질문에 정확하고 상세하게 답변해주세요.
+
+**중요한 답변 규칙:**
+1. **모든 검색된 문서를 꼼꼼히 읽어보세요.** 질문과 관련된 정보가 어디에 있는지 찾아보세요.
+2. 공고문 내용에 명확히 나와있는 정보만 답변하세요.
+3. **표 형식의 데이터를 특히 주의 깊게 확인하세요.** 표에서 관련 정보를 찾을 수 있습니다.
+   - 표의 헤더(열 이름)와 값을 매칭하여 정확한 정보를 제공하세요.
+   - 예: "전매제한 기간"을 묻는 경우, 표에서 "전매제한" 열을 찾아보세요.
+   - 예: "재당첨제한"을 묻는 경우, 표에서 "재당첨제한" 열을 찾아보세요.
+4. 질문의 키워드와 유사한 단어도 찾아보세요 (예: "기간" = "기한", "제한" = "제한기간" 등).
+5. 가능한 한 구체적이고 정확한 정보를 제공하세요 (숫자, 날짜, 조건 등).
+6. 여러 항목이 있는 경우 목록으로 정리하여 답변하세요.
+7. **정보가 정말 없는 경우에만** "공고문에 해당 정보가 명시되어 있지 않습니다"라고 답변하세요.
+   - 검색된 문서에 관련 정보가 있는지 먼저 확인하세요.
 
 [공고문 내용]
 {context}
@@ -156,14 +204,14 @@ class RAGService:
                     try:
                         # 새 SDK 사용법
                         response = genai_client.models.generate_content(
-                            model='gemini-2.0-flash-exp',
+                            model='gemini-3-pro-preview',
                             contents=prompt,
                             config={
                                 'temperature': 0,
                                 'max_output_tokens': 500,
                             }
                         )
-                        return response.text
+                        return f"Gemini 3 Pro: {response.text}"
                         
                     except Exception as e:
                         error_msg = str(e)
@@ -198,7 +246,7 @@ class RAGService:
                     temperature=0, # 사실 기반 답변을 위해 0 설정
                     max_tokens=500,  # 답변 길이 확장 (200 → 500, 긴 답변도 완전히 제공)
                 )
-                return response.choices[0].message.content
+                return f"GPT-4o-mini: {response.choices[0].message.content}"
         except Exception as e:
             return f"죄송합니다. 답변 생성 중 오류가 발생했습니다: {e}"
 
