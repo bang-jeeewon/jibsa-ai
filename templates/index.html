@@ -288,6 +288,21 @@
       .fc-toolbar-title {
         font-size: 1.1em !important;
       }
+
+      /* DB 리셋 버튼 */
+      .reset-btn {
+        background: #6c757d;
+        color: white;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 0.8rem;
+        transition: background 0.2s ease;
+      }
+      .reset-btn:hover {
+        background: #4b5563;
+      }
     </style>
   </head>
   <body>
@@ -300,14 +315,14 @@
         <div class="calendar-wrapper">
           <div id="calendar"></div>
         </div>
-        <!-- <div style="margin-top: 10px; text-align: center">
+        <div style="margin-top: 10px; text-align: center">
           <button
             onclick="resetDatabase()"
-            style="background: #ff6b6b; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 0.8rem"
+            class="reset-btn"
           >
             🗑️ DB 초기화
           </button>
-        </div> -->
+        </div>
       </div>
 
       <!-- 우측: 상세 정보 및 채팅 -->

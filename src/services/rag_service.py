@@ -160,28 +160,23 @@ class RAGService:
         
         # 디버깅: 검색된 문서 정보 출력
         print(f"📄 검색된 문서 개수: {len(related_docs)}")
-        print(f"❓ 질문: {question}")
-        for i, doc in enumerate(related_docs, 1):
-            preview = doc.page_content[:300].replace('\n', ' ')
+        for i, doc in enumerate(related_docs[:2], 1):  # 처음 2개만 출력
+            preview = doc.page_content[:500].replace('\n', ' ')
             print(f"  문서 {i} (미리보기): {preview}...")
         
         # 프롬프트 구성 (더 명확한 지시사항)
         system_prompt = f"""당신은 아파트 청약 공고문을 전문적으로 분석하는 AI 어시스턴트입니다.
 
-아래 [공고문 내용] 섹션에 있는 정보를 **철저히 검토**하여 사용자의 질문에 정확하고 상세하게 답변해주세요.
+아래 [공고문 내용] 섹션에 있는 정보만을 참고하여 사용자의 질문에 정확하고 상세하게 답변해주세요.
 
-**중요한 답변 규칙:**
-1. **모든 검색된 문서를 꼼꼼히 읽어보세요.** 질문과 관련된 정보가 어디에 있는지 찾아보세요.
-2. 공고문 내용에 명확히 나와있는 정보만 답변하세요.
-3. **표 형식의 데이터를 특히 주의 깊게 확인하세요.** 표에서 관련 정보를 찾을 수 있습니다.
-   - 표의 헤더(열 이름)와 값을 매칭하여 정확한 정보를 제공하세요.
+**답변 규칙:**
+1. 공고문 내용에 명확히 나와있는 정보만 답변하세요.
+2. 정보가 없거나 불확실한 경우 "공고문에 해당 정보가 명시되어 있지 않습니다"라고 답변하세요.
+3. 가능한 한 구체적이고 정확한 정보를 제공하세요 (숫자, 날짜, 조건 등).
+4. 여러 항목이 있는 경우 목록으로 정리하여 답변하세요.
+5. **표 형식의 데이터를 주의 깊게 확인하세요.** 표에서 관련 정보를 찾을 수 있습니다.
    - 예: "전매제한 기간"을 묻는 경우, 표에서 "전매제한" 열을 찾아보세요.
-   - 예: "재당첨제한"을 묻는 경우, 표에서 "재당첨제한" 열을 찾아보세요.
-4. 질문의 키워드와 유사한 단어도 찾아보세요 (예: "기간" = "기한", "제한" = "제한기간" 등).
-5. 가능한 한 구체적이고 정확한 정보를 제공하세요 (숫자, 날짜, 조건 등).
-6. 여러 항목이 있는 경우 목록으로 정리하여 답변하세요.
-7. **정보가 정말 없는 경우에만** "공고문에 해당 정보가 명시되어 있지 않습니다"라고 답변하세요.
-   - 검색된 문서에 관련 정보가 있는지 먼저 확인하세요.
+   - 표의 헤더와 값을 매칭하여 정확한 정보를 제공하세요.
 
 [공고문 내용]
 {context}
@@ -208,9 +203,29 @@ class RAGService:
                             contents=prompt,
                             config={
                                 'temperature': 0,
-                                'max_output_tokens': 500,
+                                'max_output_tokens': 2000,  # 500 → 2000으로 증가 (MAX_TOKENS 에러 방지)
                             }
                         )
+                        
+                        # response.text가 None인 경우 처리
+                        if response.text is None:
+                            # finish_reason 확인
+                            if hasattr(response, 'candidates') and response.candidates:
+                                candidate = response.candidates[0]
+                                finish_reason = getattr(candidate, 'finish_reason', None)
+                                print(f"⚠️ Gemini 응답이 None입니다. finish_reason: {finish_reason}")
+                                
+                                if finish_reason == 'MAX_TOKENS':
+                                    print("⚠️ 최대 토큰 수에 도달했습니다. max_output_tokens를 늘려야 합니다.")
+                                    return "죄송합니다. 응답이 너무 길어서 생성하지 못했습니다. 질문을 더 구체적으로 해주세요."
+                            
+                            if attempt < max_retries - 1:
+                                print(f"  재시도합니다... ({attempt + 1}/{max_retries})")
+                                time.sleep(2)
+                                continue
+                            else:
+                                return "죄송합니다. Gemini가 응답을 생성하지 못했습니다. 다시 시도해주세요."
+                        
                         return f"Gemini 3 Pro: {response.text}"
                         
                     except Exception as e:
@@ -244,7 +259,7 @@ class RAGService:
                         {"role": "user", "content": question}
                     ],
                     temperature=0, # 사실 기반 답변을 위해 0 설정
-                    max_tokens=500,  # 답변 길이 확장 (200 → 500, 긴 답변도 완전히 제공)
+                    max_tokens=1000,  # 답변 길이 확장 (200 → 500, 긴 답변도 완전히 제공)
                 )
                 return f"GPT-4o-mini: {response.choices[0].message.content}"
         except Exception as e:

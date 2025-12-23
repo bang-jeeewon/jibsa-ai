@@ -50,6 +50,20 @@ class VectorStoreService:
         if not chunks:
             print("⚠️ 저장할 청크가 없습니다.")
             return
+
+        # 중복 방지: 동일 doc_id가 이미 저장돼 있으면 스킵
+        try:
+            first_meta = getattr(chunks[0], "metadata", {}) or {}
+            doc_id = str(first_meta.get("doc_id")) if first_meta.get("doc_id") is not None else None
+            if doc_id:
+                # include 옵션 없이 호출하면 ids는 기본 반환됨
+                existing = self.vector_db.get(where={"doc_id": doc_id}, limit=1)
+                if existing and existing.get("ids"):
+                    print(f"⏩ doc_id={doc_id}는 이미 저장되어 있어 추가하지 않습니다.")
+                    return
+        except Exception as e:
+            # 중복 체크 실패 시에는 로그만 남기고 계속 진행
+            print(f"⚠️ 중복 확인 실패(계속 진행): {e}")
         
         print(f"💾 벡터 DB 저장 시작... (청크 {len(chunks)}개)")
         

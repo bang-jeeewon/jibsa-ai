@@ -78,21 +78,34 @@ class DataProcessor:
     def _clean_table(self, table_data: List[List[Any]]) -> List[List[Any]]:
         """표 데이터 정제 (빈 행 제거, 병합 처리 등)"""
         if not table_data: return []
-        
-        # 1. None 값 처리 (병합된 셀 채우기 - 수평 방향)
-        # (필요하다면 수직 방향 ffill도 여기서 수행 가능)
+
         cleaned_data = []
+        
+        # 1. 수평 병합 처리 (왼쪽 -> 오른쪽)
         for row in table_data:
-            new_row = list(row) # 복사
-            # 수평 채우기
+            new_row = list(row)
             for i in range(1, len(new_row)):
                 if new_row[i] is None:
-                    new_row[i] = new_row[i-1]
-            if new_row[0] is None:
-                new_row[0] = ""
+                    new_row[i] = new_row[i-1] # 왼쪽 셀 값으로 채우기
+                if new_row[0] is None:
+                    new_row[0] = ""
+            # 한 행을 한 번만 추가해야 중복이 생기지 않음
             cleaned_data.append(new_row)
+        
+        # # 2. 수직 병합 처리 (위 -> 아래)
+        # if cleaned_data:
+        #     num_cols = len(cleaned_data[0])
+        #     for col_idx in range(num_cols):
+        #         last_value = None
+        #         for row_idx in range(len(cleaned_data)):
+        #             cell = cleaned_data[row_idx][col_idx]
+        #             if cell is not None and str(cell).strip():
+        #                 last_value = cell
+        #             elif last_value is not None:
+        #                 # 위쪽 셀 값으로 채우기
+        #                 cleaned_data[row_idx][col_idx] = last_value
             
-        # 2. 위아래 불필요한 텍스트 행(Garbage Row) 제거
+        # 3. 위아래 불필요한 텍스트 행(Garbage Row) 제거
         while cleaned_data and self._is_garbage_row(cleaned_data[0]):
             cleaned_data.pop(0)
         while cleaned_data and self._is_garbage_row(cleaned_data[-1]):
