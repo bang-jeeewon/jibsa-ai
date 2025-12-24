@@ -12,15 +12,15 @@ class PDFExtractor:
             for page in pdf.pages:
                 # 1. 표 추출 설정
                 table_settings = {
-                    "vertical_strategy": "lines", 
-                    "horizontal_strategy": "lines", 
-                    "snap_tolerance": 3,
+                    "vertical_strategy": "lines", # 표의 세로 경계
+                    "horizontal_strategy": "lines", # 표의 가로 경계
+                    "snap_tolerance": 3, # 3포인트. 아주 가까운 위치에 있는 선들을 "같은 선"으로 스냅할 때 허용하는 거리 임계값   
                 }
                 
                 # 2. 표 찾기
                 tables = page.find_tables(table_settings=table_settings) 
                 
-                # 3. 테이블을 위에서 아래로 정렬 (순서 보장)
+                # 3. 테이블을 위에서 아래로 정렬 (순서 보장) (bbox : (x0, top, x1, bottom) = (왼쪽 경계x, 위쪽 경계y, 오른쪽 경계x, 아래쪽 경계y))
                 tables.sort(key=lambda t: t.bbox[1])
                 
                 last_y = 0 # 마지막으로 처리된 Y 좌표 (커서 역할)

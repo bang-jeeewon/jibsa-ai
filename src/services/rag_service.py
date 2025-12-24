@@ -1,23 +1,23 @@
 import pandas as pd
 from pathlib import Path
 from src.config.config import OPENAI_API_KEY, GOOGLE_API_KEY, CHUNK_BATCH_SIZE, RENDER
-from openai import OpenAI
-from google.genai import Client
+# from openai import OpenAI
+# from google.genai import Client
 import time
 import random
 import re
 
 # 분리된 모듈 import
-from src.services.rag.pdf_extractor import PDFExtractor
 # from src.services.rag.pdf_extractor_pymupdf import PDFExtractorPyMuPDF
 # from src.services.rag.pdf_extractor_llama import PDFExtractorLlama
 # from src.services.rag.pdf_extractor_marker import PDFExtractorMarker
-from src.services.rag.data_processor import DataProcessor
-from src.services.rag.text_chunker import TextChunker
-from src.services.rag.vector_store import VectorStoreService
+# from src.services.rag.pdf_extractor import PDFExtractor
+# from src.services.rag.data_processor import DataProcessor
+# from src.services.rag.text_chunker import TextChunker
+# from src.services.rag.vector_store import VectorStoreService
 
-openai = OpenAI(api_key=OPENAI_API_KEY)
-genai_client = Client(api_key=GOOGLE_API_KEY) 
+# openai = OpenAI(api_key=OPENAI_API_KEY)
+# genai_client = Client(api_key=GOOGLE_API_KEY) 
 
 class RAGService:
     def __init__(self, persist_directory=None, embedding_model="openai"):
@@ -27,6 +27,16 @@ class RAGService:
         :param persist_directory: None이면 in-memory 모드 (파일 저장 안 함, 서버 재시작 시 데이터 사라짐)
         :param embedding_model: 사용할 임베딩 모델 ("openai" 또는 "gemini")
         """
+        from google.genai import Client
+        from openai import OpenAI
+        from src.services.rag.pdf_extractor import PDFExtractor
+        from src.services.rag.data_processor import DataProcessor
+        from src.services.rag.text_chunker import TextChunker
+        from src.services.rag.vector_store import VectorStoreService
+
+        self.openai = OpenAI(api_key=OPENAI_API_KEY)
+        self.genai_client = Client(api_key=GOOGLE_API_KEY) 
+
         # 각 단계별 담당자(Worker) 초기화
         self.pdf_extractor = PDFExtractor()
         # self.pdf_extractor_pymupdf = PDFExtractorPyMuPDF()
@@ -37,7 +47,7 @@ class RAGService:
         self.vector_store = VectorStoreService(persist_directory, embedding_model=embedding_model)  # None = in-memory
 
 
-    def process_pdf_for_rag(self, pdf_path: str, doc_id: str):
+    def process_for_rag_rag(self, pdf_path: str, doc_id: str):
         """
         PDF 파일을 처리하여 RAG 시스템에 적재할 수 있는 형태로 변환 및 저장합니다.
         :param pdf_path: PDF 파일 경로
@@ -51,7 +61,7 @@ class RAGService:
         # raw_content = self.pdf_extractor_marker.extract_content(pdf_path)
         
         # (디버깅용) 추출된 표 데이터 엑셀 저장
-        # self.save_tables_to_excel(raw_content)
+        self.save_tables_to_excel(raw_content)
         
         # 2. Transform: 데이터 정제 및 마크다운 변환
         print("🧹 데이터 정제 및 변환 중...")

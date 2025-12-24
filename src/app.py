@@ -132,7 +132,7 @@ def analyze_apt():
     # 3. RAG 서비스에 PDF 등록 (ETF 구조)
     # house_manage_no를 문서 ID로 사용하여 메타데이터 저장
     try:
-        rag.process_pdf_for_rag(pdf_path=pdf_path, doc_id=str(house_manage_no))
+        rag.process_for_rag_rag(pdf_path=pdf_path, doc_id=str(house_manage_no))
         
         # 4. RAG 처리 완료 후 임시 PDF 파일 삭제 (Render 환경에서만)
         # 로컬 환경에서는 PDF를 tmp/pdfs/에 보관
