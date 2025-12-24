@@ -17,6 +17,9 @@ llama-parse>=0.0.1
 nest-asyncio>=1.0.0
 marker-pdf>=0.0.1
 
+# HTML -> Markdown
+html2text>=2025.4.15
+
 # 벡터 데이터베이스
 chromadb>=0.4.0
 

@@ -6,6 +6,7 @@ from src.config.config import OPENAI_API_KEY, GOOGLE_API_KEY, CHUNK_BATCH_SIZE, 
 import time
 import random
 import re
+import gc
 
 # 분리된 모듈 import
 # from src.services.rag.pdf_extractor_pymupdf import PDFExtractorPyMuPDF
@@ -55,25 +56,32 @@ class RAGService:
         """
         # 1. Extract: PDF에서 Raw 데이터 추출
         print(f"🔍 PDF 추출 시작: {pdf_path}")
-        raw_content = self.pdf_extractor.extract_content(pdf_path)
-        # raw_content = self.pdf_extractor_pymupdf.extract_content(pdf_path)
-        # raw_content = self.pdf_extractor_llama.extract_content(pdf_path)
-        # raw_content = self.pdf_extractor_marker.extract_content(pdf_path)
+        # html_content = self.pdf_extractor.extract_html(pdf_path) # pdf -> html
+        with open("extracted_view.html", "r", encoding="utf-8") as f:
+            html_content = f.read()
+        markdown_content = self.pdf_extractor.html_to_markdown(html_content)
+
+        # raw_content = self.pdf_extractor.extract_content(pdf_path) ############################################## 1
+        # # raw_content = self.pdf_extractor_pymupdf.extract_content(pdf_path)
+        # # raw_content = self.pdf_extractor_llama.extract_content(pdf_path)
+        # # raw_content = self.pdf_extractor_marker.extract_content(pdf_path)
         
-        # (디버깅용) 추출된 표 데이터 엑셀 저장
-        self.save_tables_to_excel(raw_content)
+        # # (디버깅용) 추출된 표 데이터 엑셀 저장
+        # self.save_tables_to_excel(raw_content)
         
-        # 2. Transform: 데이터 정제 및 마크다운 변환
-        print("🧹 데이터 정제 및 변환 중...")
-        processed_docs = self.data_processor.process_content(raw_content)
+        # # 2. Transform: 데이터 정제 및 마크다운 변환
+        # print("🧹 데이터 정제 및 변환 중...")
+        # processed_docs = self.data_processor.process_content(raw_content) ######################################## 2
         
-        # raw_content 메모리 해제 (더 이상 필요 없음)
-        del raw_content
-        import gc
-        gc.collect()
+        # # raw_content 메모리 해제 (더 이상 필요 없음)
+        # del raw_content
+        # import gc
+        # gc.collect()
         
-        # 3. 마크다운 문서 생성
-        final_rag_document = "\n\n".join(processed_docs)
+        # # 3. 마크다운 문서 생성
+        # final_rag_document = "\n\n".join(processed_docs)
+        
+        final_rag_document = markdown_content
         
         # 로컬 환경에서만 마크다운 파일 저장
         is_render = RENDER == "true" or RENDER == "1"
@@ -82,12 +90,12 @@ class RAGService:
             self.save_rag_document_as_md(pdf_path, final_rag_document)
         
         # processed_docs 메모리 해제
-        del processed_docs
-        gc.collect()
+        # del processed_docs
+        # gc.collect()
         
         # 4. Chunking: 텍스트 청킹 (메모리 효율을 위해 배치로 처리)
         print("🔪 텍스트 청킹 중...")
-        chunks = self.text_chunker.chunk_markdown(final_rag_document)
+        chunks = self.text_chunker.chunk_markdown(final_rag_document) ############################################ 3
         
         # final_rag_document 메모리 해제 (청킹 완료 후 더 이상 필요 없음)
         del final_rag_document
@@ -117,7 +125,7 @@ class RAGService:
             # 배치 크기가 0이거나 청크 개수보다 크면 한 번에 처리 (로컬 환경)
             if chunk_batch_size == 0 or chunk_batch_size >= len(chunks):
                 print(f"  💾 청크 저장 중... (한 번에 {len(chunks)}개)")
-                self.vector_store.add_documents(chunks)
+                self.vector_store.add_documents(chunks) ########################################################### 4
             else:
                 # Render 환경: 배치로 나누어 저장 (메모리 효율)
                 total_chunks = len(chunks)
