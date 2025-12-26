@@ -48,7 +48,7 @@ class RAGService:
         self.vector_store = VectorStoreService(persist_directory, embedding_model=embedding_model)  # None = in-memory
 
 
-    def process_for_rag_rag(self, pdf_path: str, doc_id: str):
+    def process_for_rag(self, pdf_path: str, doc_id: str):
         """
         PDF 파일을 처리하여 RAG 시스템에 적재할 수 있는 형태로 변환 및 저장합니다.
         :param pdf_path: PDF 파일 경로
@@ -56,10 +56,13 @@ class RAGService:
         """
         # 1. Extract: PDF에서 Raw 데이터 추출
         print(f"🔍 PDF 추출 시작: {pdf_path}")
-        # html_content = self.pdf_extractor.extract_html(pdf_path) # pdf -> html
-        with open("extracted_view.html", "r", encoding="utf-8") as f:
-            html_content = f.read()
-        markdown_content = self.pdf_extractor.html_to_markdown(html_content)
+        # html_string = self.pdf_extractor.extract_html_by_information_extraction(pdf_path) # pdf -> json
+        html_string = self.pdf_extractor.extract_html_by_document_digitization(pdf_path) # pdf -> html
+        markdown_content = self.pdf_extractor.html_to_markdown(html_string)
+        # markdown_content = self.pdf_extractor.extract_html_by_document_digitization(pdf_path) # pdf -> html
+        # with open("extracted_view.html", "r", encoding="utf-8") as f:
+        #     html_content = f.read()
+        # markdown_content = self.pdf_extractor.html_to_markdown(html_content)
 
         # raw_content = self.pdf_extractor.extract_content(pdf_path) ############################################## 1
         # # raw_content = self.pdf_extractor_pymupdf.extract_content(pdf_path)
@@ -101,9 +104,12 @@ class RAGService:
         del final_rag_document
         gc.collect()
         
-        # [중요] 모든 청크에 문서 ID(doc_id) 메타데이터 추가
+        # [중요]⭐ 모든 청크에 문서 ID(doc_id) 메타데이터 추가
+        # 검색(Retrieval) 성능을 높이기 위해 다음 메타데이터 추가하면 좋음
+        # 청크 요약, 핵심 키워드, 부모 문서의 제목, 페이지 번호  
         for chunk in chunks:
             chunk.metadata['doc_id'] = str(doc_id)
+            print("==============", chunk.metadata)
 
         print(f"✅ 총 {len(chunks)}개의 청크가 생성되었습니다.")
         
@@ -204,7 +210,7 @@ class RAGService:
         try:
             if model == "gemini":
                 # Gemini 모델 사용 (새 SDK: google-genai)
-                if not genai_client:
+                if not self.genai_client:
                     return "GOOGLE_API_KEY가 설정되지 않아 Gemini를 사용할 수 없습니다."
                 
                 prompt = f"{system_prompt}\n\n질문: {question}"
@@ -216,7 +222,7 @@ class RAGService:
                 for attempt in range(max_retries):
                     try:
                         # 새 SDK 사용법
-                        response = genai_client.models.generate_content(
+                        response = self.genai_client.models.generate_content(
                             model='gemini-3-pro-preview',
                             contents=prompt,
                             config={
@@ -270,7 +276,7 @@ class RAGService:
                             raise
             else:
                 # OpenAI 모델 사용 (기본값)
-                response = openai.chat.completions.create(
+                response = self.openai.chat.completions.create(
                     model="gpt-4o-mini", # 가성비 좋은 모델 사용
                     messages=[
                         {"role": "system", "content": system_prompt},

@@ -1,17 +1,12 @@
 import pdfplumber
 import requests
 import html2text
+import base64
 from openai import OpenAI
 from src.config.config import UPSTAGE_API_KEY, UPSTAGE_BASE_URL
 from typing import List, Dict, Any
 
 class PDFExtractor:
-    def __init__(self):
-        self.client = OpenAI(
-            api_key=UPSTAGE_API_KEY,
-            base_url=UPSTAGE_BASE_URL
-        )
-
     def html_to_markdown(self, html_string: str):
         """
         HTML -> Markdown 변환
@@ -31,29 +26,123 @@ class PDFExtractor:
 
         return markdown_string
     
-    
-    def extract_html(self, pdf_path: str): 
+
+    def extract_html_by_document_digitization(self, pdf_path: str): 
         """
-        Upstage API 사용하여 PDF -> HTML 변환
+        Upstage document-digitization API 사용하여 PDF -> HTML 변환
         """
         headers = {"Authorization": f"Bearer {UPSTAGE_API_KEY}"}
         files = {"document": open(pdf_path, "rb")}
         data = {
-            "ocr": "force", 
-            "base64_encoding": ["table"], 
-            "model": "document-parse"
+            "ocr": "force", # PDF가 종이를 스캔한 이미지PDF 이어도 어떤 형태든 상관없이 이미지를 분석해서 글자를 읽어냄. 그자가 그림으로 되어 있는 복잡한 표나 로고 근처의 글자도 놓치지 않고 꼼꼼하게 읽음
+            "base64_encoding": ["table"], # 표(Table)은 이미지(Base64 문자열)로도 같이 전송. Upstage는 표를 HTML 텍스트로도 주지만, 원본 표 모양 그대로 그림 형태로 보관하고 싶을 때 사용.
+            "model": "document-parse", # 사용할 AI 모델의 이름 
+            "output_formats": ["html"], # 명시적으로 출력 형식 요청 
+            # "mode": "enhanced" # document-parse-nightly 모델에서 된다고 했는데, server error로 안됨. containing complex tables, images, charts, and other advanced visual elements.
         }
         response = requests.post(UPSTAGE_BASE_URL, headers=headers, files=files, data=data)
         result = response.json()
 
         # --- HTML 파일 저장 ---
         html_string = result.get('content', {}).get('html', '')
+        markdown_string = result.get('content', {}).get('markdown', '')
+        print("markdown_string:",markdown_string[:100])
+
+        # return markdown_string
 
         if html_string:
             with open("extracted_view.html", "w", encoding="utf-8") as f:
                 f.write(html_string)
             print("✅ HTML 파일 저장 완료: extracted_view.html")
-        return result
+        return html_string
+
+
+    # def encode_pdf_to_base64(self, pdf_path: str):
+    #     """
+    #     PDF 파일을 Base64 인코딩
+    #     """
+    #     with open(pdf_path, "rb") as f:
+    #         # 1. PDF의 이진 데이터를 읽음
+    #         pdf_bytes = f.read()
+    #         # 2. 이진 데이터를 Base64 텍스트로 변환
+    #         base64_data = base64.b64encode(pdf_bytes).decode('utf-8')
+    #         return base64_data
+
+
+    # def extract_html_by_information_extraction(self, pdf_path: str):
+    #     """
+    #     Upstage information-extraction API 사용하여 PDF -> JSON 변환
+    #     """
+    #     client = OpenAI(
+    #         api_key=UPSTAGE_API_KEY,
+    #         base_url=UPSTAGE_BASE_URL
+    #     )
+    #     base64_data = self.encode_pdf_to_base64(pdf_path)
+    #     response = client.chat.completions.create(
+    #         model="information-extract",
+    #         messages=[
+    #             {
+    #                 "role": "user",
+    #                 "content": [
+    #                     {
+    #                         "type": "image_url",
+    #                         "image_url": {"url": f"data:application/pdf;base64,{base64_data}"}
+    #                     }
+    #                 ]
+    #             }
+    #         ],
+    #         response_format={
+    #             "type": "json_schema",
+    #             "json_schema": {
+    #                 "name": "document_schema",
+    #                 "schema": {
+    #                     "type": "object",
+    #                     "properties": {
+    #                         "document_title": {
+    #                             "type": "string",
+    #                             "description": "전체 공고명"
+    #                         },
+    #                         "h1_sections": {
+    #                             "type": "array",
+    #                             "description": "대제목 단위 (예: I. 공통 유의사항)",
+    #                             "items": {
+    #                                 "type": "object",
+    #                                 "properties": {
+    #                                     "h1_title": { "type": "string" },
+    #                                     "h2_sections": {
+    #                                         "type": "array",
+    #                                         "description": "중제목 단위 (예: IV-1. 기관추천)",
+    #                                         "items": {
+    #                                             "type": "object",
+    #                                             "properties": {
+    #                                                 "h2_title": { "type": "string" },
+    #                                                 "h3_sections": {
+    #                                                     "type": "array",
+    #                                                     "description": "소제목 및 상세 내용 (예: 신청자격, 선정방법)",
+    #                                                     "items": {
+    #                                                         "type": "object",
+    #                                                         "properties": {
+    #                                                             "h3_title": { "type": "string" },
+    #                                                             "content": { "type": "string" },
+    #                                                         }
+    #                                                     }
+    #                                                 }
+    #                                             }
+    #                                         }
+    #                                     }
+    #                                 }
+    #                             }
+    #                         }
+    #                     }
+    #                 }
+    #             }
+    #         },
+    #         extra_body={ 
+    #             "mode": "enhanced"
+    #         } 
+    #     )
+    #     result = response.choices[0].message.content
+    #     return result
 
 
     def extract_content(self, pdf_path: str) -> List[Dict[str, Any]]:
@@ -143,4 +232,3 @@ class PDFExtractor:
                         pass
                         
         return all_content
-
