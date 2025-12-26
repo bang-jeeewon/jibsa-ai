@@ -1,7 +1,6 @@
 import pdfplumber
 import requests
 import html2text
-import base64
 from openai import OpenAI
 from src.config.config import UPSTAGE_API_KEY, UPSTAGE_BASE_URL
 from typing import List, Dict, Any

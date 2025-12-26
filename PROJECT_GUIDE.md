@@ -37,31 +37,25 @@
 #### 1.4 PDF 내용 추출 (Extract)
 
 - **모듈**: `PDFExtractor`
-- **라이브러리**: `pdfplumber`
-- PDF에서 다음을 추출합니다:
-  - **텍스트 데이터**: 페이지의 일반 텍스트
-  - **표 데이터**: 테이블 구조를 2차원 리스트로 추출
-- 추출된 데이터는 순서를 보장하며 `[{"type": "text"|"table", "content": ..., "page": ..., "y_start": ..., "y_end": ...}]` 형식으로 반환됩니다.
+- **엔진**: **Upstage Document Parse API**
+- **처리 과정**:
+  - `ocr="force"` 옵션을 사용하여 스캔된 이미지 PDF에서도 텍스트를 정확히 읽어냅니다.
+  - `document-parse` 모델을 통해 문서의 레이아웃(제목, 본문, 표 등)을 분석하여 HTML 형식으로 추출합니다.
+  - 추출된 HTML은 시각적으로 복잡한 표 구조를 완벽하게 보존합니다.
 
 #### 1.5 데이터 정제 및 Markdown 변환 (Transform)
 
-- **모듈**: `DataProcessor`
+- **모듈**: `PDFExtractor.html_to_markdown`
+- **라이브러리**: `html2text`
 - **처리 과정**:
-  1. **텍스트 정제**: 페이지 번호 등 불필요한 텍스트 제거
-  2. **제목 변환**: 알려진 제목(예: "공통 유의사항", "공급대상 및 공급금액")을 Markdown 헤더(`#`, `##`)로 변환
-  3. **표 정제**:
-     - 빈 행 제거
-     - 병합된 셀 처리 (수평 방향 채우기)
-     - 불필요한 텍스트 행(Garbage Row) 제거
-  4. **Markdown 표 변환**: `tabulate` 라이브러리를 사용하여 표를 Markdown 형식으로 변환
+  - Upstage에서 추출한 고품질 HTML을 Markdown으로 직접 변환합니다.
+  - `bypass_tables=False` 설정을 통해 HTML 표 구조를 Markdown 표 형식으로 정확하게 변환합니다.
+  - 불필요한 레이아웃 태그를 제거하고 문서의 계층 구조를 유지합니다.
 
 #### 1.6 텍스트 청킹 (Chunking)
 
 - **모듈**: `TextChunker`
 - **1차 분할**: `MarkdownHeaderTextSplitter`를 사용하여 Markdown 헤더(`#`, `##`, `###`)를 기준으로 문서를 분할
-- **2차 분할**: `RecursiveCharacterTextSplitter`를 사용하여 긴 청크를 추가로 분할
-  - `chunk_size`: 500자 (비용 절감을 위해 최적화)
-  - `chunk_overlap`: 50자 (문맥 유지를 위한 겹침)
 - 각 청크는 LangChain의 `Document` 객체로 생성되며, 헤더 정보가 메타데이터에 포함됩니다.
 
 #### 1.7 벡터 DB 저장 (Load)
@@ -129,7 +123,7 @@
   - **Gemini Pro**: 무료 티어 제공, 대화 히스토리를 프롬프트 텍스트에 포함
 - **파라미터**:
   - `temperature=0`: 사실 기반 답변을 위해 일관성 유지
-  - `max_tokens=500`: 답변 길이 제한
+  - `max_tokens=1000`: 답변 길이 제한
 - **재시도 로직**:
   - 429 에러 발생 시 최대 3회 재시도
   - 에러 메시지에서 retry delay 추출하여 대기
@@ -186,7 +180,9 @@ ai/
   - **Google Generative AI** `gemini-embedding-001` (선택 시, 3072 차원): 무료 티어 제공
 - **LLM 답변 생성**:
   - **OpenAI** `gpt-4o-mini` (기본값): 비용 효율적, 안정적
-  - **Google Gemini** `gemini-2.0-flash-exp` (선택 시): 무료 티어 제공
+  - **Google Gemini** `gemini-3-pro-preview` (선택 시): 최신 프리뷰 모델 사용
+- **문서 파싱**:
+  - **Upstage Document AI**: 레이아웃 분석 및 OCR 기반 고품질 데이터 추출
 
 ### 데이터 처리
 
@@ -201,9 +197,9 @@ ai/
 ## 💡 주요 특징
 
 1. **ETL 구조**: Extract(추출) → Transform(변환) → Load(저장) 파이프라인으로 명확히 분리
-2. **문서별 필터링**: `doc_id` 메타데이터를 활용하여 특정 공고 내에서만 검색
+2. **문서별 필터링**: `doc_id`, `header_1` 메타데이터를 활용하여 특정 공고 내에서만 검색
 3. **비용 최적화**:
-   - 청크 크기 최적화 (500자)
+   - 청크 크기 최적화 (1000자)
    - 가성비 좋은 모델 사용 (`gpt-4o-mini`)
    - 프롬프트 간소화
 4. **지연 초기화**: 무거운 서비스(RAG, 크롤링 등)는 실제 사용 시점에만 초기화하여 서버 시작 시간 단축
@@ -292,8 +288,6 @@ ai/
 
 ## 📝 사용자 설명 검증 결과
 
-사용자가 설명한 프로젝트 구조는 **모두 정확**합니다:
-
 ✅ 유저가 공고를 클릭하면 해당 공고의 PDF를 크롤링으로 다운받음  
 ✅ PDF에서 텍스트와 표 데이터를 추출  
 ✅ 추출된 raw content를 정제해서 markdown으로 변환  
@@ -307,8 +301,7 @@ ai/
 
 - `doc_id` 필터링으로 특정 공고 내에서만 검색
 - PDF 처리 후 임시 파일 자동 삭제
-- 청크에 메타데이터로 `doc_id` 추가
-- 2차 청킹(RecursiveCharacterTextSplitter)으로 긴 청크 추가 분할
+- 청크에 메타데이터로 `doc_id`, `header_1` 추가
 - 비용 최적화를 위한 청크 크기 및 모델 선택
 - **배치 처리**: 청크를 5개씩 묶어서 처리하고 배치 간 4초 대기 (rate limit 방지)
 - **재시도 로직**: 429 에러 발생 시 자동 재시도 (최대 3회)
@@ -333,7 +326,7 @@ pip install -r requirements.txt
 3. **서버 실행**:
 
 ```bash
-python src/app.py
+python -m src.app
 ```
 
 4. **브라우저 접속**:
@@ -356,5 +349,5 @@ http://localhost:10000
 
 ---
 
-**작성일**: 2024년  
-**프로젝트**: 아파트 청약 공고문 챗봇
+**작성일**: 2025년 12월 26일  
+**프로젝트**: 아파트 청약 공고 일정 & 챗봇

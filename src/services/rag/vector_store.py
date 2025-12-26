@@ -1,7 +1,7 @@
-from langchain_openai import OpenAIEmbeddings
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
+# from langchain_openai import OpenAIEmbeddings
+# from langchain_google_genai import GoogleGenerativeAIEmbeddings
 # from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_chroma import Chroma
+# from langchain_chroma import Chroma
 from src.config.config import OPENAI_API_KEY, GOOGLE_API_KEY, RENDER
 import time
 import random
@@ -13,6 +13,10 @@ class VectorStoreService:
         :param persist_directory: None이면 in-memory 모드 (파일 저장 안 함)
         :param embedding_model: 사용할 임베딩 모델 ("openai" 또는 "gemini")
         """
+        from langchain_openai import OpenAIEmbeddings
+        from langchain_google_genai import GoogleGenerativeAIEmbeddings
+        from langchain_chroma import Chroma
+
         self.persist_directory = persist_directory
         
         # 임베딩 모델 선택 (기본값: OpenAI - 더 안정적이고 rate limit이 높음)
@@ -44,6 +48,8 @@ class VectorStoreService:
             embedding_function=self.embeddings,
             collection_name="apt_notices" # 컬렉션 이름 지정
         )
+
+        gc.collect()
 
     def add_documents(self, chunks):
         """청크 리스트를 벡터 DB에 추가 (재시도 로직 포함)"""

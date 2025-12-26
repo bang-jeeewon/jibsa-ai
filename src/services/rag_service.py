@@ -1,4 +1,4 @@
-import pandas as pd
+# import pandas as pd
 from pathlib import Path
 from src.config.config import OPENAI_API_KEY, GOOGLE_API_KEY, CHUNK_BATCH_SIZE, RENDER
 # from openai import OpenAI
@@ -31,7 +31,7 @@ class RAGService:
         from google.genai import Client
         from openai import OpenAI
         from src.services.rag.pdf_extractor import PDFExtractor
-        from src.services.rag.data_processor import DataProcessor
+        # from src.services.rag.data_processor import DataProcessor
         from src.services.rag.text_chunker import TextChunker
         from src.services.rag.vector_store import VectorStoreService
 
@@ -43,9 +43,11 @@ class RAGService:
         # self.pdf_extractor_pymupdf = PDFExtractorPyMuPDF()
         # self.pdf_extractor_llama = PDFExtractorLlama()
         # self.pdf_extractor_marker = PDFExtractorMarker()
-        self.data_processor = DataProcessor()
+        # self.data_processor = DataProcessor()
         self.text_chunker = TextChunker()
         self.vector_store = VectorStoreService(persist_directory, embedding_model=embedding_model)  # None = in-memory
+
+        gc.collect()
 
 
     def process_for_rag(self, pdf_path: str, doc_id: str):
@@ -56,13 +58,17 @@ class RAGService:
         """
         # 1. Extract: PDF에서 Raw 데이터 추출
         print(f"🔍 PDF 추출 시작: {pdf_path}")
+        # Upstage Information Extraction API 사용
         # html_string = self.pdf_extractor.extract_html_by_information_extraction(pdf_path) # pdf -> json
-        html_string = self.pdf_extractor.extract_html_by_document_digitization(pdf_path) # pdf -> html
-        markdown_content = self.pdf_extractor.html_to_markdown(html_string)
-        # markdown_content = self.pdf_extractor.extract_html_by_document_digitization(pdf_path) # pdf -> html
-        # with open("extracted_view.html", "r", encoding="utf-8") as f:
-        #     html_content = f.read()
-        # markdown_content = self.pdf_extractor.html_to_markdown(html_content)
+
+        # Upstage Document AI API 사용
+        # html_string = self.pdf_extractor.extract_html_by_document_digitization(pdf_path) # pdf -> html
+        # markdown_content = self.pdf_extractor.html_to_markdown(html_string)
+
+        # 역삼센트럴자이 저장된 html 파일 읽어오기 (API 사용 방지)
+        with open("extracted_view.html", "r", encoding="utf-8") as f:
+            html_content = f.read()
+        markdown_content = self.pdf_extractor.html_to_markdown(html_content)
 
         # raw_content = self.pdf_extractor.extract_content(pdf_path) ############################################## 1
         # # raw_content = self.pdf_extractor_pymupdf.extract_content(pdf_path)
@@ -109,7 +115,6 @@ class RAGService:
         # 청크 요약, 핵심 키워드, 부모 문서의 제목, 페이지 번호  
         for chunk in chunks:
             chunk.metadata['doc_id'] = str(doc_id)
-            print("==============", chunk.metadata)
 
         print(f"✅ 총 {len(chunks)}개의 청크가 생성되었습니다.")
         
@@ -151,11 +156,12 @@ class RAGService:
 
         return '====처리 완료===='
 
-    def answer_question(self, question: str, doc_id: str = None, model: str = "openai"):
+    def answer_question(self, question: str, doc_id: str = None, model: str = "openai", conversation_history: list = []):
         """
         사용자의 질문에 대해 RAG 방식으로 답변을 생성합니다.
         :param doc_id: 특정 문서에서만 검색하려면 ID 지정
         :param model: 사용할 모델 ("openai" 또는 "gemini")
+        :param conversation_history: 이전 대화 내용
         """
         model_display = "GPT-4o-mini" if model == "openai" else "Gemini Pro"
         print(f"🤔 질문 분석 중: {question}")
@@ -185,11 +191,11 @@ class RAGService:
         # 디버깅: 검색된 문서 정보 출력
         print(f"📄 검색된 문서 개수: {len(related_docs)}")
         for i, doc in enumerate(related_docs[:2], 1):  # 처음 2개만 출력
-            preview = doc.page_content[:500].replace('\n', ' ')
+            preview = doc.page_content[:100].replace('\n', ' ')
             print(f"  문서 {i} (미리보기): {preview}...")
         
         # 프롬프트 구성 (더 명확한 지시사항)
-        system_prompt = f"""당신은 아파트 청약 공고문을 전문적으로 분석하는 AI 어시스턴트입니다.
+        system_prompt = f"""당신은 아파트 청약 공고문을 전문적으로 분석하여 사용자가 해당 청약 자격이 되는지 정보를 제공하는 AI 어시스턴트입니다.
 
 아래 [공고문 내용] 섹션에 있는 정보만을 참고하여 사용자의 질문에 정확하고 상세하게 답변해주세요.
 
@@ -197,14 +203,22 @@ class RAGService:
 1. 공고문 내용에 명확히 나와있는 정보만 답변하세요.
 2. 정보가 없거나 불확실한 경우 "공고문에 해당 정보가 명시되어 있지 않습니다"라고 답변하세요.
 3. 가능한 한 구체적이고 정확한 정보를 제공하세요 (숫자, 날짜, 조건 등).
-4. 여러 항목이 있는 경우 목록으로 정리하여 답변하세요.
-5. **표 형식의 데이터를 주의 깊게 확인하세요.** 표에서 관련 정보를 찾을 수 있습니다.
-   - 예: "전매제한 기간"을 묻는 경우, 표에서 "전매제한" 열을 찾아보세요.
+4. **표 형식의 데이터를 주의 깊게 확인하세요.** 표에서 관련 정보를 찾을 수 있습니다.
    - 표의 헤더와 값을 매칭하여 정확한 정보를 제공하세요.
 
 [공고문 내용]
 {context}
 """
+
+        # 대화 히스토리를 텍스트로 변환
+        history_text = ""
+        if conversation_history:
+            for msg in conversation_history[-3:]: # 최근 3턴만 유지
+                role = "user" if msg["role"] == 'user' else "AI"
+                history_text += f"{role}: {msg['content']}\n"
+        
+        # 시스템 프롬프트에 히스토리 섹션 추가
+        system_prompt += f"\n\n[이전 대화 내용]\n{history_text}"
 
         # 3. Generate: 답변 생성
         try:
@@ -294,31 +308,31 @@ class RAGService:
         print("🗑️ 벡터 DB 초기화 요청")
         self.vector_store.clear()
 
-    def save_tables_to_excel(self, all_content, output_path="extracted_tables.xlsx"):
-        """
-        (디버깅용) 추출된 표 데이터를 엑셀 파일로 저장
-        """
-        with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
-            table_count = 0
-            for item in all_content:
-                if item["type"] == "table":
-                    table_count += 1
-                    table_data = item["content"]
+    # def save_tables_to_excel(self, all_content, output_path="extracted_tables.xlsx"):
+    #     """
+    #     (디버깅용) 추출된 표 데이터를 엑셀 파일로 저장
+    #     """
+    #     with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
+    #         table_count = 0
+    #         for item in all_content:
+    #             if item["type"] == "table":
+    #                 table_count += 1
+    #                 table_data = item["content"]
                     
-                    # 데이터가 없거나 유효하지 않으면 패스
-                    if not table_data: continue
+    #                 # 데이터가 없거나 유효하지 않으면 패스
+    #                 if not table_data: continue
                     
-                    df = pd.DataFrame(table_data)
-                    sheet_name = f"Table {table_count}"
-                    # 시트 이름 길이 제한 (31자)
-                    if len(sheet_name) > 31: sheet_name = sheet_name[:31]
+    #                 df = pd.DataFrame(table_data)
+    #                 sheet_name = f"Table {table_count}"
+    #                 # 시트 이름 길이 제한 (31자)
+    #                 if len(sheet_name) > 31: sheet_name = sheet_name[:31]
                     
-                    try:
-                        df.to_excel(writer, sheet_name=sheet_name, index=False)
-                    except Exception as e:
-                        print(f"엑셀 시트 저장 실패 ({sheet_name}): {e}")
+    #                 try:
+    #                     df.to_excel(writer, sheet_name=sheet_name, index=False)
+    #                 except Exception as e:
+    #                     print(f"엑셀 시트 저장 실패 ({sheet_name}): {e}")
 
-        print(f"✅ 표 데이터 엑셀 저장 완료: {output_path}")
+    #     print(f"✅ 표 데이터 엑셀 저장 완료: {output_path}")
 
     def save_rag_document_as_md(self, pdf_path: str, final_rag_document: str):
         """

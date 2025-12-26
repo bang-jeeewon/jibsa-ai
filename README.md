@@ -20,16 +20,17 @@
 ### 주요 기능
 
 - 공고 일정 캘린더 뷰 & 상세 메타데이터 확인
-- PDF 텍스트/표 추출 후 마크다운 변환 및 청킹
+- **Upstage Document AI 기반 고성능 PDF 파싱 (텍스트 & 표 추출)**
+- PDF의 HTML 구조를 유지한 채 Markdown 변환 및 지능형 청킹
 - 벡터 DB 기반 문서 한정 질의응답 (RAG)
-- 모델 스위칭: OpenAI ↔︎ Gemini
+- 모델 스위칭: OpenAI GPT-4o-mini ↔︎ Google Gemini 3 Pro
 - Render 배포 환경 최적화(임시 파일 정리, 경로 보정)
 
 ### 기술 스택 (Python 중심)
 
 - **웹**: Flask + Jinja 템플릿
-- **RAG 파이프라인**: PDFExtractor → DataProcessor(텍스트/표 정제) → TextChunker → Chroma(VectorStoreService)
-- **임베딩/LLM**: OpenAI text-embedding-3-small, GPT-4o-mini / Google Gemini Pro
+- **RAG 파이프라인**: PDFExtractor (Upstage API) → html2text (Markdown 변환) → TextChunker → Chroma(VectorStoreService)
+- **임베딩/LLM**: OpenAI text-embedding-3-small, GPT-4o-mini / Google Gemini 3 Pro (Preview)
 - **데이터**: Chroma 퍼시스턴스, 공고 크롤링 & PDF 다운로드 서비스 연동
 - **배포**: Render (환경 변수 기반 경로 설정, 임시 파일 정리 로직 포함)
 

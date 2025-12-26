@@ -316,12 +316,7 @@
           <div id="calendar"></div>
         </div>
         <div style="margin-top: 10px; text-align: center">
-          <button
-            onclick="resetDatabase()"
-            class="reset-btn"
-          >
-            🗑️ DB 초기화
-          </button>
+          <button onclick="resetDatabase()" class="reset-btn">🗑️ DB 초기화</button>
         </div>
       </div>
 
@@ -413,6 +408,7 @@
 
       let currentHouseManageNo = null; // 현재 선택된 공고 ID 저장
       let selectedLLM = 'openai'; // 기본값: GPT
+      let conversationHistory = []; // 이전 대화 내용
 
       function initializeLLMButtons() {
         // 라디오 버튼으로 GPT 선택 (기본값)
@@ -534,9 +530,13 @@
               question: question,
               house_manage_no: currentHouseManageNo, // 질문 시 ID 함께 전송
               model: selectedLLM, // 선택된 LLM 전송
+              conversation_history: conversationHistory, // 이전 대화 내용
             }),
           });
           const data = await response.json();
+
+          conversationHistory.push({ role: 'user', content: question }); // 사용자 질문
+          conversationHistory.push({ role: 'AI', content: data.answer }); // AI 답변
 
           // 로딩 제거 및 응답 표시
           const loadingElement = document.getElementById(loadingId);

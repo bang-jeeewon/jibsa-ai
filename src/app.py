@@ -175,6 +175,7 @@ def query():
     question = data.get('question', '')
     house_manage_no = data.get('house_manage_no') # 프론트에서 전달받은 공고 ID
     model = data.get('model', 'openai') # 사용할 모델 선택 (기본값: openai)
+    conversation_history = data.get('conversation_history', []) # 이전 대화 내용
     
     if not question:
         return jsonify({"answer": "질문을 입력해주세요."})
@@ -187,7 +188,7 @@ def query():
     # RAG 모델을 통해 답변 생성
     try:
         # doc_id 필터를 적용하여 해당 공고 내에서만 검색
-        answer = rag.answer_question(question, doc_id=str(house_manage_no), model=model)
+        answer = rag.answer_question(question, doc_id=str(house_manage_no), model=model, conversation_history=conversation_history)
         print(f"✅ 답변 생성 완료 ({model_name})")
         return jsonify({"answer": answer})
     except Exception as e:
