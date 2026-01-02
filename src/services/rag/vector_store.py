@@ -19,11 +19,13 @@ class VectorStoreService:
         # from langchain_chroma import Chroma
 
         self.persist_directory = persist_directory
+        gc.collect()
         print("VectorStoreService 1")
 
         # 1. 임베딩 라이브러리만 먼저 로드
         if embedding_model == "gemini":
             from langchain_google_genai import GoogleGenerativeAIEmbeddings
+            gc.collect()
             print("VectorStoreService 2")
             self.embeddings = GoogleGenerativeAIEmbeddings(
                 model="models/gemini-embedding-001",
@@ -33,23 +35,23 @@ class VectorStoreService:
             )
         else:
             from langchain_openai import OpenAIEmbeddings
+            gc.collect()
             print("VectorStoreService 2.1")
             self.embeddings = OpenAIEmbeddings(
                 model="text-embedding-3-small",
                 api_key=OPENAI_API_KEY
             )
-        
         gc.collect() # 2. 임시 메모리 청소  
         
         # 3. 그 다음 Chroma 로드
         from langchain_chroma import Chroma
+        gc.collect()
         print("VectorStoreService 3")
         self.vector_db = Chroma(
             persist_directory=self.persist_directory,  # None이면 메모리만 사용
             embedding_function=self.embeddings,
             collection_name="apt_notices" # 컬렉션 이름 지정
         )
-
         gc.collect() # 4. 메모리 청소  
         
         # # 임베딩 모델 선택 (기본값: OpenAI - 더 안정적이고 rate limit이 높음)
