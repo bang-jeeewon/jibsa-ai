@@ -27,12 +27,18 @@ class RAGService:
         :param persist_directory: None이면 in-memory 모드 (파일 저장 안 함, 서버 재시작 시 데이터 사라짐)
         :param embedding_model: 사용할 임베딩 모델 ("openai" 또는 "gemini")
         """
+        print("RAGService 1")
         from google.genai import Client
+        print("RAGService 2")
         from openai import OpenAI
+        print("RAGService 3")
         from src.services.rag.pdf_extractor import PDFExtractor
+        print("RAGService 4")
         # from src.services.rag.data_processor import DataProcessor
         from src.services.rag.text_chunker import TextChunker
+        print("RAGService 5")
         from src.services.rag.vector_store import VectorStoreService
+        print("RAGService 6")
 
         self.openai = OpenAI(api_key=OPENAI_API_KEY)
         self.genai_client = Client(api_key=GOOGLE_API_KEY) 
