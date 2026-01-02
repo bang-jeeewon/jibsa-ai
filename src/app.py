@@ -2,6 +2,7 @@ from flask import Flask, jsonify, render_template, request
 import json
 import os
 import sys
+import gc
 from pathlib import Path
 from datetime import datetime, timedelta
 
@@ -33,6 +34,7 @@ def get_crawl_url_service():
             print(f"⚠️ CrawlUrlService 초기화 중 에러 발생: {e}")
             crawl_url_service = None
             raise
+    gc.collect()
     return crawl_url_service
 
 
@@ -49,6 +51,7 @@ def get_download_pdf_service():
             print(f"⚠️ DownloadPdfService 초기화 중 에러 발생: {e}")
             download_pdf_service = None
             raise
+    gc.collect()
     return download_pdf_service
 
 
@@ -57,11 +60,9 @@ def get_rag_service():
     global rag_service
     if rag_service is None:
         try:
-            import gc
-            gc.collect()
-            
             print("🔄 RAGService 초기화 시작...")
             from src.services.rag_service import RAGService
+            gc.collect()
             project_root = Path(__file__).parent.parent
             rag_service = RAGService(persist_directory=str(project_root / "data" / "chroma_db"))
 

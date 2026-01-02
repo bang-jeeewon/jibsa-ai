@@ -123,6 +123,9 @@ class VectorStoreService:
                     for i in range(0, len(chunks), batch_size):
                         batch = chunks[i:i + batch_size]
                         self.vector_db.add_documents(batch)
+                        del batch
+                        gc.collect()
+
                         # 배치 간 대기 (rate limit 방지) - 분당 15 요청 기준으로 약 4초 간격
                         if i + batch_size < len(chunks):
                             wait_time = 4.0  # 4초 대기 (분당 15 요청 = 4초당 1 요청)
@@ -144,12 +147,16 @@ class VectorStoreService:
                     try:
                         # 기존 컬렉션 삭제
                         self.vector_db.delete_collection()
+                        del self.vector_db
+                        gc.collect()
                         # 새 컬렉션 생성 (현재 임베딩 모델로)
+                        from langchain_chroma import Chroma
                         self.vector_db = Chroma(
                             persist_directory=self.persist_directory,
                             embedding_function=self.embeddings,
                             collection_name="apt_notices"
                         )
+                        gc.collect()
                         print("✅ 벡터 DB 재생성 완료. 다시 시도합니다...")
                         # 재시도 (한 번만)
                         continue
@@ -181,11 +188,16 @@ class VectorStoreService:
         try:
             self.vector_db.delete_collection()
             # 컬렉션 재생성 (삭제 후 다시 쓰기 위해)
+            del self.vector_db
+            gc.collect()
+
+            from langchain_chroma import Chroma
             self.vector_db = Chroma(
                 persist_directory=self.persist_directory,  # None이면 in-memory
                 embedding_function=self.embeddings,
                 collection_name="apt_notices"
             )
+            gc.collect()
             print("✅ 벡터 DB 초기화 완료")
         except Exception as e:
             print(f"❌ 초기화 실패: {e}")

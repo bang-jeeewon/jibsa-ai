@@ -1,4 +1,5 @@
-import pdfplumber
+# import pdfplumber
+import gc
 import requests
 import html2text
 from openai import OpenAI
@@ -20,6 +21,8 @@ class PDFExtractor:
 
         # 3. 변환 실행
         markdown_string = h.handle(html_string)
+        gc.collect()
+        
         with open("extracted_md.md", "w", encoding="utf-8") as f:
                 f.write(markdown_string)
 
@@ -149,6 +152,8 @@ class PDFExtractor:
         pdfplumber 사용   
         PDF 파일에서 텍스트와 표 데이터를 추출하여 순서대로 반환합니다.
         """
+        import pdfplumber
+        gc.collect()
         all_content = []
 
         with pdfplumber.open(pdf_path) as pdf:

@@ -1,4 +1,5 @@
 from langchain_text_splitters import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
+import gc
 
 class TextChunker:
     def chunk_markdown(self, markdown_text):
@@ -19,4 +20,5 @@ class TextChunker:
         # )
         # final_chunks = text_splitter.split_documents(header_splits)
 
+        gc.collect()
         return header_splits # 우선은 헤더 단위로만 청크 생성  

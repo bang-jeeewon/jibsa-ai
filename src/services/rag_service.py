@@ -29,15 +29,20 @@ class RAGService:
         """
         print("RAGService 1")
         from google.genai import Client
+        gc.collect()
         print("RAGService 2")
         from openai import OpenAI
+        gc.collect()
         print("RAGService 3")
         from src.services.rag.pdf_extractor import PDFExtractor
+        gc.collect()
         print("RAGService 4")
         # from src.services.rag.data_processor import DataProcessor
         from src.services.rag.text_chunker import TextChunker
+        gc.collect()
         print("RAGService 5")
         from src.services.rag.vector_store import VectorStoreService
+        gc.collect()
         print("RAGService 6")
 
         self.openai = OpenAI(api_key=OPENAI_API_KEY)
