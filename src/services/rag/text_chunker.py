@@ -1,8 +1,11 @@
-from langchain_text_splitters import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
+# from langchain_text_splitters import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
 import gc
 
 class TextChunker:
     def chunk_markdown(self, markdown_text):
+        from langchain_text_splitters import MarkdownHeaderTextSplitter
+        gc.collect()
+
         # 1. 제목 기준으로 1차 분할
         headers_to_split_on = [
             ("#", "header_1"),
