@@ -2,7 +2,7 @@
 langchain-openai>=0.0.2
 langchain-google-genai>=0.0.2
 # langchain-huggingface>=0.0.2
-langchain-chroma>=0.1.0
+langchain-chroma==0.1.2
 langchain-text-splitters>=0.1.0
 
 # 데이터 처리

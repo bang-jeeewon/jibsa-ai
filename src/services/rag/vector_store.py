@@ -42,7 +42,7 @@ class VectorStoreService:
                 api_key=OPENAI_API_KEY
             )
         gc.collect() # 2. 임시 메모리 청소  
-        
+
         # 3. 그 다음 Chroma 로드
         from langchain_chroma import Chroma
         gc.collect()
