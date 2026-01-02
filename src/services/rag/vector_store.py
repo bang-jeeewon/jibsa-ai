@@ -5,6 +5,7 @@
 from src.config.config import OPENAI_API_KEY, GOOGLE_API_KEY, RENDER
 import time
 import random
+import gc
 
 class VectorStoreService:
     def __init__(self, persist_directory=None, embedding_model="openai"):
@@ -13,43 +14,70 @@ class VectorStoreService:
         :param persist_directory: None이면 in-memory 모드 (파일 저장 안 함)
         :param embedding_model: 사용할 임베딩 모델 ("openai" 또는 "gemini")
         """
-        from langchain_openai import OpenAIEmbeddings
-        from langchain_google_genai import GoogleGenerativeAIEmbeddings
-        from langchain_chroma import Chroma
+        # from langchain_openai import OpenAIEmbeddings
+        # from langchain_google_genai import GoogleGenerativeAIEmbeddings
+        # from langchain_chroma import Chroma
 
         self.persist_directory = persist_directory
-        
-        # 임베딩 모델 선택 (기본값: OpenAI - 더 안정적이고 rate limit이 높음)
+
+        # 1. 임베딩 라이브러리만 먼저 로드
         if embedding_model == "gemini":
-            # GoogleGenerativeAIEmbeddings에 재시도 로직이 내장되어 있지만, 추가 설정 가능
+            from langchain_google_genai import GoogleGenerativeAIEmbeddings
             self.embeddings = GoogleGenerativeAIEmbeddings(
                 model="models/gemini-embedding-001",
                 google_api_key=GOOGLE_API_KEY,  # API 키 명시적으로 전달
                 # rate limit 방지를 위한 추가 설정
                 request_options={"timeout": 60}  # 타임아웃 설정
             )
-            print("🔵 임베딩 모델: Gemini")
         else:
-            # 기본값: OpenAI 임베딩 (GPT 선택 시 사용, 더 안정적)
+            from langchain_openai import OpenAIEmbeddings
             self.embeddings = OpenAIEmbeddings(
                 model="text-embedding-3-small",
                 api_key=OPENAI_API_KEY
             )
-            print("🟢 임베딩 모델: OpenAI")
+        
+        gc.collect() # 2. 임시 메모리 청소  
+        
+        # 3. 그 다음 Chroma 로드
+        from langchain_chroma import Chroma
+        self.vector_db = Chroma(
+            persist_directory=self.persist_directory,  # None이면 메모리만 사용
+            embedding_function=self.embeddings,
+            collection_name="apt_notices" # 컬렉션 이름 지정
+        )
+        
+        # # 임베딩 모델 선택 (기본값: OpenAI - 더 안정적이고 rate limit이 높음)
+        # if embedding_model == "gemini":
+        #     # GoogleGenerativeAIEmbeddings에 재시도 로직이 내장되어 있지만, 추가 설정 가능
+        #     self.embeddings = GoogleGenerativeAIEmbeddings(
+        #         model="models/gemini-embedding-001",
+        #         google_api_key=GOOGLE_API_KEY,  # API 키 명시적으로 전달
+        #         # rate limit 방지를 위한 추가 설정
+        #         request_options={"timeout": 60}  # 타임아웃 설정
+        #     )
+        #     print("🔵 임베딩 모델: Gemini")
+        # else:
+        #     # 기본값: OpenAI 임베딩 (GPT 선택 시 사용, 더 안정적)
+        #     self.embeddings = OpenAIEmbeddings(
+        #         model="text-embedding-3-small",
+        #         api_key=OPENAI_API_KEY
+        #     )
+        #     print("🟢 임베딩 모델: OpenAI")
+
         # self.embeddings = HuggingFaceEmbeddings(
         #     model_name="jhgan/ko-sroberta-multitask",
         #     model_kwargs={'device': 'cpu'},
         #     encode_kwargs={'normalize_embeddings': True}
         # )
 
-        # DB 초기화 (persist_directory=None이면 in-memory 모드)
-        self.vector_db = Chroma(
-            persist_directory=self.persist_directory,  # None이면 메모리만 사용
-            embedding_function=self.embeddings,
-            collection_name="apt_notices" # 컬렉션 이름 지정
-        )
+        # # DB 초기화 (persist_directory=None이면 in-memory 모드)
+        # self.vector_db = Chroma(
+        #     persist_directory=self.persist_directory,  # None이면 메모리만 사용
+        #     embedding_function=self.embeddings,
+        #     collection_name="apt_notices" # 컬렉션 이름 지정
+        # )
 
-        gc.collect()
+        # gc.collect()
 
     def add_documents(self, chunks):
         """청크 리스트를 벡터 DB에 추가 (재시도 로직 포함)"""

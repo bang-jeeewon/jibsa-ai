@@ -1,4 +1,3 @@
-# import pandas as pd
 from pathlib import Path
 from src.config.config import OPENAI_API_KEY, GOOGLE_API_KEY, CHUNK_BATCH_SIZE, RENDER
 # from openai import OpenAI
@@ -46,7 +45,6 @@ class RAGService:
         # self.data_processor = DataProcessor()
         self.text_chunker = TextChunker()
         self.vector_store = VectorStoreService(persist_directory, embedding_model=embedding_model)  # None = in-memory
-
         gc.collect()
 
 
