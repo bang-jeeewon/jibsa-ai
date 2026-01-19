@@ -2,31 +2,135 @@
 import gc
 import requests
 import html2text
-from openai import OpenAI
+# from openai import OpenAI
 from src.config.config import UPSTAGE_API_KEY, UPSTAGE_BASE_URL
 from typing import List, Dict, Any
+from bs4 import BeautifulSoup
 
 class PDFExtractor:
+    def normalize_html_table(self, table_html, debug=False):
+        """
+        rowspan, colspan이 포함된 HTML 표를 모든 칸이 채워진 2차원 리스트로 변환
+        """
+        if not table_html:
+            if debug: print("DEBUG: table_html is empty")
+            return []
+        
+        if debug: print(f"\n--- DEBUG START: Table ID {table_html.get('id', 'unknown')} ---")
+        
+        grid = {}
+        # 표 내부의 모든 행(tr)을 찾습니다.
+        rows = table_html.find_all('tr')
+        if debug: print(f"DEBUG: Total rows found: {len(rows)}")
+
+        curr_row = 0
+        for row in rows:
+            curr_col = 0
+            # 현재 행(tr) 바로 아래의 td, th만 찾습니다.
+            cells = row.find_all(['td', 'th'], recursive=False)
+            if debug: print(f"  DEBUG: Row {curr_row} - Cells found: {len(cells)}")
+
+            for cell in cells:
+                # 이미 점유된 칸 건너뛰기
+                while (curr_row, curr_col) in grid:
+                    curr_col += 1
+                
+                # 병합 정보 추출 (없으면 1)
+                rowspan = int(cell.get('rowspan', 1))
+                colspan = int(cell.get('colspan', 1))
+                
+                # 셀 텍스트 정리 (공백 및 줄바꿈 정리)
+                content = " ".join(cell.get_text().split())
+                if debug: print(f"    DEBUG: Cell at ({curr_row}, {curr_col}) -> content: '{content[:20]}...', rowspan: {rowspan}, colspan: {colspan}")
+
+                # 그리드의 해당 범위에 내용 채우기
+                for r in range(curr_row, curr_row + rowspan):
+                    for c in range(curr_col, curr_col + colspan):
+                        grid[(r, c)] = content
+                
+                curr_col += colspan
+            curr_row += 1
+        
+        if not grid:
+            if debug: print("DEBUG: Grid is empty after processing")
+            return []
+        
+        # 그리드 크기 측정
+        max_row = max(r for r, c in grid.keys()) + 1
+        max_col = max(c for r, c in grid.keys()) + 1
+        if debug: print(f"DEBUG: Grid normalized to {max_row}x{max_col} matrix")
+
+        # 2차원 리스트 생성
+        table_matrix = []
+        for r in range(max_row):
+            row_data = [grid.get((r, c), "") for c in range(max_col)]
+            table_matrix.append(row_data)
+        
+        if debug: print("--- DEBUG END ---\n")
+        return table_matrix
+
+
+    def matrix_to_markdown(self, matrix):
+        """
+        2차원 리스트를 마크다운 표 문자열로 변환
+        """
+        if not matrix:
+            return ""
+
+        lines = []
+        for i, row in enumerate(matrix):
+            # 특수 기호(|)가 데이터에 있을 경우 대비하여 치환
+            clean_row = [str(cell).replace("|", "\\|") for cell in row]
+            lines.append("| " + " | ".join(clean_row) + " |")
+            
+            # 헤더 아래 구분선 (첫 번째 행 직후)
+            if i == 0:
+                lines.append("|" + "---| " * len(row) + "|")
+        
+        return "\n" + "\n".join(lines) + "\n"
+
+
     def html_to_markdown(self, html_string: str):
         """
-        HTML -> Markdown 변환
+        HTML 전체를 마크다운으로 변환하되, 표는 정규화 로직 적용
         """
-        # 1. 변환기 설정
+        soup = BeautifulSoup(html_string, 'html.parser')
+        tables = soup.find_all('table')
+
+        # 1. 테이블을 먼저 처리하여 마크다운으로 변환해둠
+        normalized_tables = []
+        for i, table in enumerate(tables):
+            # 4번째 테이블(인덱스 3)만 디버깅 로그 출력
+            matrix = self.normalize_html_table(table, debug=(i == 3))
+            md_table = self.matrix_to_markdown(matrix)
+            normalized_tables.append(md_table)
+
+            # 2. HTML에서 테이블을 아주 단순한 고유 마커로 치환
+            # html2text가 절대 건드리지 못할 형태의 텍스트 사용
+            placeholder = soup.new_tag("p")
+            placeholder.string = f"REPLACE_ME_TABLE_{i}"
+            table.replace_with(placeholder)
+        
+        # 3. 테이블이 제거된 나머지 본문을 마크다운으로 변환
         h = html2text.HTML2Text()
-
-        # 2. 설정 옵션
-        h.ignore_links = False # 링크 유지 여부
-        h.bypass_tables = False # False로 해야 표를 마크다운 형식으로 변환함
-        h.body_width = 0 # 줄바꿈 방지  
-
-        # 3. 변환 실행
-        markdown_string = h.handle(html_string)
+        h.bypass_tables = True  # 테이블 무시
+        h.ignore_links = False
+        h.body_width = 0        # 자동 줄바꿈 방지
+        markdown_result = h.handle(str(soup))
+        
+        # 4. 마커를 실제 정규화된 마크다운 표로 교체
+        for i, md_table in enumerate(normalized_tables):
+            # html2text 변환 결과에 따라 마커 앞뒤에 공백이 생길 수 있으므로 유연하게 처리
+            target = f"REPLACE_ME_TABLE_{i}"
+            markdown_result = markdown_result.replace(target, md_table)
+            
         gc.collect()
         
+        # 결과 확인용 저장
         with open("extracted_md.md", "w", encoding="utf-8") as f:
-                f.write(markdown_string)
+            f.write(markdown_result)
 
-        return markdown_string
+        return markdown_result
     
 
     def extract_html_by_document_digitization(self, pdf_path: str): 
