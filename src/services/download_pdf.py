@@ -1,7 +1,4 @@
 from pathlib import Path
-import img2pdf
-from pypdf import PdfReader, PdfWriter
-import io
 from src.client.download_client import ApplyhomeDownloadClient
 
 class DownloadPdfService: # PDF 다운로드 서비스
