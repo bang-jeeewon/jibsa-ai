@@ -63,8 +63,7 @@ def get_rag_service():
             print("🔄 RAGService 초기화 시작...")
             from src.services.rag_service import RAGService
             gc.collect()
-            project_root = Path(__file__).parent.parent
-            rag_service = RAGService(persist_directory=str(project_root / "data" / "chroma_db"))
+            rag_service = RAGService()
 
             gc.collect()
             print("✅ RAGService 초기화 완료")

@@ -2,23 +2,21 @@
 # from langchain_google_genai import GoogleGenerativeAIEmbeddings
 # from langchain_huggingface import HuggingFaceEmbeddings
 # from langchain_chroma import Chroma
-from src.config.config import OPENAI_API_KEY, GOOGLE_API_KEY, RENDER
+from src.config.config import OPENAI_API_KEY, GOOGLE_API_KEY, RENDER, SUPABASE_DB_URL
 import time
 import random
 import gc
 
 class VectorStoreService:
-    def __init__(self, persist_directory=None, embedding_model="openai"):
+    def __init__(self, embedding_model="openai"):
         """
-        VectorStoreService 초기화
-        :param persist_directory: None이면 in-memory 모드 (파일 저장 안 함)
+        VectorStoreService 초기화 (Supabase pgvector 사용)
         :param embedding_model: 사용할 임베딩 모델 ("openai" 또는 "gemini")
         """
         # from langchain_openai import OpenAIEmbeddings
         # from langchain_google_genai import GoogleGenerativeAIEmbeddings
         # from langchain_chroma import Chroma
 
-        self.persist_directory = persist_directory
         gc.collect()
         print("VectorStoreService 1")
 
@@ -43,16 +41,34 @@ class VectorStoreService:
             )
         gc.collect() # 2. 임시 메모리 청소  
 
-        # 3. 그 다음 Chroma 로드
-        from langchain_chroma import Chroma
+        # 3. Supabase pgvector 연결
+        if not SUPABASE_DB_URL:
+            raise ValueError("SUPABASE_DB_URL 환경변수가 설정되지 않았습니다.")
+        from langchain_postgres import PGVector
+        from sqlalchemy import create_engine
         gc.collect()
         print("VectorStoreService 3")
-        self.vector_db = Chroma(
-            persist_directory=self.persist_directory,  # None이면 메모리만 사용
-            embedding_function=self.embeddings,
-            collection_name="apt_notices" # 컬렉션 이름 지정
+        # 임베딩 모델별로 컬렉션 분리 (OpenAI 1536차원 / Gemini 3072차원 섞이지 않게)
+
+        self.collection_name = f"apt_notices_{embedding_model}"
+        self.engine = create_engine(SUPABASE_DB_URL, pool_pre_ping=True, pool_size=2, max_overflow=0)
+        self.vector_db = PGVector(
+            embeddings=self.embeddings,
+            collection_name=self.collection_name,
+            connection=self.engine,
+            use_jsonb=True
         )
-        gc.collect() # 4. 메모리 청소  
+        gc.collect()
+
+        # # 3. 그 다음 Chroma 로드
+        # from langchain_chroma import Chroma
+        # gc.collect()
+        # print("VectorStoreService 3")
+        # self.vector_db = Chroma(
+        #     embedding_function=self.embeddings,
+        #     collection_name="apt_notices" # 컬렉션 이름 지정
+        # )
+        # gc.collect() # 4. 메모리 청소  
         
         # # 임베딩 모델 선택 (기본값: OpenAI - 더 안정적이고 rate limit이 높음)
         # if embedding_model == "gemini":
@@ -77,15 +93,19 @@ class VectorStoreService:
         #     model_kwargs={'device': 'cpu'},
         #     encode_kwargs={'normalize_embeddings': True}
         # )
-
-        # # DB 초기화 (persist_directory=None이면 in-memory 모드)
-        # self.vector_db = Chroma(
-        #     persist_directory=self.persist_directory,  # None이면 메모리만 사용
-        #     embedding_function=self.embeddings,
-        #     collection_name="apt_notices" # 컬렉션 이름 지정
-        # )
-
         # gc.collect()
+    
+    def _exists(self, doc_id):
+        """같은 doc_id 청크가 이미 저장돼 있는지 확인 (Chroma의 .get(where=...) 대체)"""
+        from sqlalchemy import text
+        sql = text("""
+            SELECT 1 FROM langchain_pg_embedding e
+            JOIN langchain_pg_collection c ON e.collection_id = c.uuid
+            WHERE c.name = :name AND e.cmetadata->>'doc_id' = :doc_id
+            LIMIT 1
+        """)
+        with self.engine.connect() as conn:
+            return conn.execute(sql, {"name": self.collection_name, "doc_id": doc_id}).first() is not None
 
     def add_documents(self, chunks):
         """청크 리스트를 벡터 DB에 추가 (재시도 로직 포함)"""
@@ -97,12 +117,9 @@ class VectorStoreService:
         try:
             first_meta = getattr(chunks[0], "metadata", {}) or {}
             doc_id = str(first_meta.get("doc_id")) if first_meta.get("doc_id") is not None else None
-            if doc_id:
-                # include 옵션 없이 호출하면 ids는 기본 반환됨
-                existing = self.vector_db.get(where={"doc_id": doc_id}, limit=1)
-                if existing and existing.get("ids"):
-                    print(f"⏩ doc_id={doc_id}는 이미 저장되어 있어 추가하지 않습니다.")
-                    return
+            if doc_id and self._exists(doc_id):
+                print(f"⏩ doc_id={doc_id}는 이미 저장되어 있어 추가하지 않습니다.")
+                return
         except Exception as e:
             # 중복 체크 실패 시에는 로그만 남기고 계속 진행
             print(f"⚠️ 중복 확인 실패(계속 진행): {e}")
@@ -142,32 +159,9 @@ class VectorStoreService:
                 
             except Exception as e:
                 error_msg = str(e)
-                
-                # 차원 불일치 에러 처리 (임베딩 모델 변경 시 발생)
-                if "dimension" in error_msg.lower() or "expecting embedding" in error_msg.lower():
-                    print("⚠️ 임베딩 차원 불일치 감지. 기존 벡터 DB를 초기화합니다...")
-                    try:
-                        # 기존 컬렉션 삭제
-                        self.vector_db.delete_collection()
-                        del self.vector_db
-                        gc.collect()
-                        # 새 컬렉션 생성 (현재 임베딩 모델로)
-                        from langchain_chroma import Chroma
-                        self.vector_db = Chroma(
-                            persist_directory=self.persist_directory,
-                            embedding_function=self.embeddings,
-                            collection_name="apt_notices"
-                        )
-                        gc.collect()
-                        print("✅ 벡터 DB 재생성 완료. 다시 시도합니다...")
-                        # 재시도 (한 번만)
-                        continue
-                    except Exception as init_error:
-                        print(f"❌ 벡터 DB 재생성 실패: {init_error}")
-                        raise
-                
+
                 # 429 에러 처리 (할당량 초과)
-                elif "429" in error_msg or "RESOURCE_EXHAUSTED" in error_msg or "quota" in error_msg.lower():
+                if "429" in error_msg or "RESOURCE_EXHAUSTED" in error_msg or "quota" in error_msg.lower():
                     if attempt < max_retries - 1:
                         # Exponential backoff: 대기 시간 증가
                         wait_time = retry_delay * (2 ** attempt) + random.uniform(0, 1)
@@ -190,16 +184,7 @@ class VectorStoreService:
         try:
             self.vector_db.delete_collection()
             # 컬렉션 재생성 (삭제 후 다시 쓰기 위해)
-            del self.vector_db
-            gc.collect()
-
-            from langchain_chroma import Chroma
-            self.vector_db = Chroma(
-                persist_directory=self.persist_directory,  # None이면 in-memory
-                embedding_function=self.embeddings,
-                collection_name="apt_notices"
-            )
-            gc.collect()
+            self.vector_db.create_collection()
             print("✅ 벡터 DB 초기화 완료")
         except Exception as e:
             print(f"❌ 초기화 실패: {e}")

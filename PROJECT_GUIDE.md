@@ -61,8 +61,7 @@
 #### 1.7 벡터 DB 저장 (Load)
 
 - **모듈**: `VectorStoreService`
-- **벡터 DB**: Chroma (LangChain 통합)
-- **저장 위치**: `persist_directory` 파라미터로 지정 (기본값: `./data/chroma_db`)
+- **벡터 DB**: Supabase PGVector (LangChain 통합)
 - **임베딩 모델**:
   - **기본값**: OpenAI `text-embedding-3-small` (더 안정적이고 rate limit이 높음)
   - **선택 가능**: Google Generative AI `models/gemini-embedding-001` (설정 시 사용)
@@ -292,7 +291,7 @@ ai/
 ✅ PDF에서 텍스트와 표 데이터를 추출  
 ✅ 추출된 raw content를 정제해서 markdown으로 변환  
 ✅ Markdown의 header를 기준으로 청크 생성  
-✅ 벡터 DB(Chroma)에 청크 저장, `persist_directory` 사용  
+✅ 벡터 DB(Supabase PGVector)에 청크 저장  
 ✅ 유저 질문 입력 시 벡터 DB에서 관련 문서 검색  
 ✅ 검색된 문서로 context 생성 후 프롬프트 구성  
 ✅ GPT-4o-mini 또는 Gemini Pro 모델로 답변 생성 (사용자 선택)

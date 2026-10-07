@@ -20,11 +20,10 @@ import gc
 # genai_client = Client(api_key=GOOGLE_API_KEY) 
 
 class RAGService:
-    def __init__(self, persist_directory=None, embedding_model="openai"):
+    def __init__(self, embedding_model="openai"):
         """
         RAG 파이프라인을 총괄하는 서비스 클래스.
         ETL 프로세스를 각 담당 클래스에게 위임하여 실행합니다.
-        :param persist_directory: None이면 in-memory 모드 (파일 저장 안 함, 서버 재시작 시 데이터 사라짐)
         :param embedding_model: 사용할 임베딩 모델 ("openai" 또는 "gemini")
         """
         print("RAGService 1")
@@ -46,7 +45,7 @@ class RAGService:
         print("RAGService 6")
 
         self.openai = OpenAI(api_key=OPENAI_API_KEY)
-        self.genai_client = Client(api_key=GOOGLE_API_KEY) 
+        self.genai_client = Client(api_key=GOOGLE_API_KEY) if GOOGLE_API_KEY else None
 
         # 각 단계별 담당자(Worker) 초기화
         self.pdf_extractor = PDFExtractor()
@@ -55,7 +54,7 @@ class RAGService:
         # self.pdf_extractor_marker = PDFExtractorMarker()
         # self.data_processor = DataProcessor()
         self.text_chunker = TextChunker()
-        self.vector_store = VectorStoreService(persist_directory, embedding_model=embedding_model)  # None = in-memory
+        self.vector_store = VectorStoreService(embedding_model=embedding_model)
         gc.collect()
 
 
