@@ -73,11 +73,21 @@ class RAGService:
         if self.vector_store._exists(str(doc_id)):
             print(f"⏩ doc_id={doc_id}는 이미 처리된 공고입니다. 분석을 건너뜁니다.")
             return {"skipped": True, "chunk_count": 0}
+
         
         # 1. Extract: Upstage Document Parse API로 PDF -> HTML 변환 후 Markdown으로 변환
         print(f"🔍 PDF 추출 시작: {pdf_path}")
-        html_content = self.pdf_extractor.extract_html_by_document_digitization(pdf_path)
+        # 같은 공고를 다시 분석할 때 Upstage 재호출 방지 (페이지당 과금 절약, tmp/는 gitignore 대상)
+        html_cache_path = Path("tmp/html") / f"{doc_id}.html"
+        if html_cache_path.exists():
+            html_content = html_cache_path.read_text(encoding="utf-8")
+            print(f"♻️ 캐시된 추출 결과 사용: {html_cache_path}")
+        else:
+            html_content = self.pdf_extractor.extract_html_by_document_digitization(pdf_path)
+            html_cache_path.parent.mkdir(parents=True, exist_ok=True)
+            html_cache_path.write_text(html_content, encoding="utf-8")
         markdown_content = self.pdf_extractor.html_to_markdown(html_content)
+
 
         # (아카이브) 원본 PDF, 추출 HTML, 변환 Markdown 저장
         if archive_prefix:

@@ -130,29 +130,10 @@ class VectorStoreService:
         max_retries = 3
         retry_delay = 2  # 초기 대기 시간 (초)
         
-        # Render 환경인지 확인 (로컬에서는 한 번에 처리, Render에서는 배치 처리)
-        is_render = RENDER == "true" or RENDER == "1"
-        
         for attempt in range(max_retries):
             try:
-                if is_render:
-                    # Render 환경: 작은 배치로 나누어 처리 (rate limit 방지)
-                    # Gemini API 무료 티어: 분당 약 15-60 요청 제한 (모델에 따라 다름)
-                    batch_size = 5  # 한 번에 처리할 청크 수 (더 작게)
-                    for i in range(0, len(chunks), batch_size):
-                        batch = chunks[i:i + batch_size]
-                        self.vector_db.add_documents(batch)
-                        del batch
-                        gc.collect()
-
-                        # 배치 간 대기 (rate limit 방지) - 분당 15 요청 기준으로 약 4초 간격
-                        if i + batch_size < len(chunks):
-                            wait_time = 4.0  # 4초 대기 (분당 15 요청 = 4초당 1 요청)
-                            print(f"  배치 {i//batch_size + 1} 완료. {wait_time}초 대기 중... (rate limit 방지)")
-                            time.sleep(wait_time)
-                else:
-                    # 로컬 환경: 한 번에 처리
-                    self.vector_db.add_documents(chunks)
+                # 배치 분할(Render 메모리 대응)은 rag_service.process_for_rag에서 처리
+                self.vector_db.add_documents(chunks)
                 
                 print("✅ 벡터 DB 저장 완료!")
                 return
