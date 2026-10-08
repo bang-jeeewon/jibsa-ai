@@ -125,11 +125,6 @@ class PDFExtractor:
             markdown_result = markdown_result.replace(target, md_table)
             
         gc.collect()
-        
-        # 결과 확인용 저장
-        with open("extracted_md.md", "w", encoding="utf-8") as f:
-            f.write(markdown_result)
-
         return markdown_result
     
 
@@ -137,30 +132,28 @@ class PDFExtractor:
         """
         Upstage document-digitization API 사용하여 PDF -> HTML 변환
         """
+        if not UPSTAGE_API_KEY or not UPSTAGE_BASE_URL:
+            raise ValueError("UPSTAGE_API_KEY / UPSTAGE_BASE_URL 환경변수가 설정되지 않았습니다.")
+
         headers = {"Authorization": f"Bearer {UPSTAGE_API_KEY}"}
-        files = {"document": open(pdf_path, "rb")}
         data = {
-            "ocr": "force", # PDF가 종이를 스캔한 이미지PDF 이어도 어떤 형태든 상관없이 이미지를 분석해서 글자를 읽어냄. 그자가 그림으로 되어 있는 복잡한 표나 로고 근처의 글자도 놓치지 않고 꼼꼼하게 읽음
-            "base64_encoding": ["table"], # 표(Table)은 이미지(Base64 문자열)로도 같이 전송. Upstage는 표를 HTML 텍스트로도 주지만, 원본 표 모양 그대로 그림 형태로 보관하고 싶을 때 사용.
+            "ocr": "force", # 스캔 이미지 PDF여도 이미지에서 글자를 읽어냄 (표/로고 주변 글자 포함)
             "model": "document-parse", # 사용할 AI 모델의 이름 
             "output_formats": ["html"], # 명시적으로 출력 형식 요청 
-            # "mode": "enhanced" # document-parse-nightly 모델에서 된다고 했는데, server error로 안됨. containing complex tables, images, charts, and other advanced visual elements.
         }
-        response = requests.post(UPSTAGE_BASE_URL, headers=headers, files=files, data=data)
-        result = response.json()
+        with open(pdf_path, "rb") as f:
+            response = requests.post(UPSTAGE_BASE_URL, headers=headers, files={"document": f}, data=data, timeout=300)
 
-        # --- HTML 파일 저장 ---
-        html_string = result.get('content', {}).get('html', '')
-        markdown_string = result.get('content', {}).get('markdown', '')
-        print("markdown_string:",markdown_string[:100])
+        if response.status_code != 200:
+            raise RuntimeError(f"Upstage API 오류 ({response.status_code}): {response.text[:300]}")
 
-        # return markdown_string
+        html_string = response.json().get('content', {}).get('html', '')
+        if not html_string:
+            raise RuntimeError("Upstage API 응답에 HTML 내용이 없습니다.")
 
-        if html_string:
-            with open("extracted_view.html", "w", encoding="utf-8") as f:
-                f.write(html_string)
-            print("✅ HTML 파일 저장 완료: extracted_view.html")
+        print(f"✅ Upstage PDF → HTML 변환 완료 ({len(html_string):,}자)")
         return html_string
+
 
 
     # def encode_pdf_to_base64(self, pdf_path: str):

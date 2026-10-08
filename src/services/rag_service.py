@@ -74,18 +74,9 @@ class RAGService:
             print(f"⏩ doc_id={doc_id}는 이미 처리된 공고입니다. 분석을 건너뜁니다.")
             return {"skipped": True, "chunk_count": 0}
         
-        # 1. Extract: PDF에서 Raw 데이터 추출
+        # 1. Extract: Upstage Document Parse API로 PDF -> HTML 변환 후 Markdown으로 변환
         print(f"🔍 PDF 추출 시작: {pdf_path}")
-        # Upstage Information Extraction API 사용
-        # html_string = self.pdf_extractor.extract_html_by_information_extraction(pdf_path) # pdf -> json
-
-        # Upstage Document AI API 사용
-        # html_string = self.pdf_extractor.extract_html_by_document_digitization(pdf_path) # pdf -> html
-        # markdown_content = self.pdf_extractor.html_to_markdown(html_string)
-
-        # 역삼센트럴자이 저장된 html 파일 읽어오기 (API 사용 방지)
-        with open("extracted_view.html", "r", encoding="utf-8") as f:
-            html_content = f.read()
+        html_content = self.pdf_extractor.extract_html_by_document_digitization(pdf_path)
         markdown_content = self.pdf_extractor.html_to_markdown(html_content)
 
         # (아카이브) 원본 PDF, 추출 HTML, 변환 Markdown 저장
