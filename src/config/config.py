@@ -21,3 +21,6 @@ UPSTAGE_API_KEY = os.getenv("UPSTAGE_API_KEY")
 UPSTAGE_BASE_URL = os.getenv("UPSTAGE_BASE_URL")
 
 SUPABASE_DB_URL = os.getenv("SUPABASE_DB_URL")
+
+AWS_S3_BUCKET = os.getenv("AWS_S3_BUCKET")
+AWS_REGION = os.getenv("AWS_REGION", "ap-northeast-2")

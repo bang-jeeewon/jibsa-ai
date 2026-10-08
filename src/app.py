@@ -3,6 +3,7 @@ import json
 import os
 import sys
 import gc
+import time
 from pathlib import Path
 from datetime import datetime, timedelta
 
@@ -136,36 +137,43 @@ def analyze_apt():
 
     # 3. RAG 서비스에 PDF 등록 (ETF 구조)
     # house_manage_no를 문서 ID로 사용하여 메타데이터 저장
+    archive_prefix = rag.archive.notice_prefix(house_manage_no)
+    meta = {
+        "house_manage_no": house_manage_no,
+        "pblanc_no": pblanc_no,
+        "house_secd": house_secd,
+        "pblanc_url": pblanc_url,
+        "download_url": download_url,
+        "started_at": rag.archive.now().isoformat(),
+    }
+    started = time.perf_counter()
+
+    from src.config.config import RENDER
+    is_render = RENDER == "true" or RENDER == "1"
+
     try:
-        rag.process_for_rag(pdf_path=pdf_path, doc_id=str(house_manage_no))
-        
-        # 4. RAG 처리 완료 후 임시 PDF 파일 삭제 (Render 환경에서만)
-        # 로컬 환경에서는 PDF를 tmp/pdfs/에 보관
-        from src.config.config import RENDER
-        is_render = RENDER == "true" or RENDER == "1"
-        
-        if is_render:
-            # Render 환경: 임시 파일 삭제
-            if os.path.exists(pdf_path):
-                os.remove(pdf_path)
-                print(f"🗑️ 임시 PDF 파일 삭제 완료: {pdf_path}")
-        else:
-            # 로컬 환경: PDF 보관 (이미 tmp/pdfs/에 저장되어 있음)
-            print(f"💾 PDF 파일 보관: {pdf_path}")
-        
+        result = rag.process_for_rag(pdf_path=pdf_path, doc_id=str(house_manage_no), archive_prefix=archive_prefix)
+        meta.update(status="skipped" if result["skipped"] else "success", chunk_count=result["chunk_count"])
         return jsonify({"status": "success", "message": "PDF 등록 완료"})
     except Exception as e:
-        # 에러 발생 시에도 Render 환경에서만 임시 파일 삭제 시도
-        from src.config.config import RENDER
-        is_render = RENDER == "true" or RENDER == "1"
-        
+        meta.update(status="error", error=str(e))
+        raise
+    finally:
+        # (아카이브) 처리 결과 저장 - 이미 처리된 공고(skipped)는 남기지 않음
+        meta["elapsed_sec"] = round(time.perf_counter() - started, 2)
+        if meta.get("status") != "skipped":
+            rag.archive.put_json(meta, archive_prefix + "meta.json")
+
+        # 4. 임시 PDF 파일 정리 (Render 환경에서만 삭제, 로컬은 tmp/pdfs/에 보관)
         if is_render and os.path.exists(pdf_path):
             try:
                 os.remove(pdf_path)
-                print(f"🗑️ 에러 발생 후 임시 PDF 파일 삭제 완료: {pdf_path}")
-            except:
+                print(f"🗑️ 임시 PDF 파일 삭제 완료: {pdf_path}")
+            except OSError:
                 pass
-        raise e
+        elif not is_render:
+            print(f"💾 PDF 파일 보관: {pdf_path}")
+
 
 
 @app.route('/api/query', methods=['POST'])
@@ -192,10 +200,24 @@ def query():
 
     # RAG 모델을 통해 답변 생성
     try:
+        started = time.perf_counter()
         # doc_id 필터를 적용하여 해당 공고 내에서만 검색
         answer = rag.answer_question(question, doc_id=str(house_manage_no), model=model, conversation_history=conversation_history)
         print(f"✅ 답변 생성 완료 ({model_name})")
+
+        # (아카이브) 질의응답 로그 저장
+        rag.archive.put_json({
+            "house_manage_no": house_manage_no,
+            "model": model,
+            "question": question,
+            "answer": answer,
+            "history_turns": len(conversation_history),
+            "elapsed_sec": round(time.perf_counter() - started, 2),
+            "created_at": rag.archive.now().isoformat(),
+        }, rag.archive.qa_key(house_manage_no))
+
         return jsonify({"answer": answer})
+
     except Exception as e:
         print(f"Error generating answer: {e}")
         return jsonify({"answer": "죄송합니다. 답변을 생성하는 중에 오류가 발생했습니다."}), 500

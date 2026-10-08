@@ -43,6 +43,8 @@ class RAGService:
         from src.services.rag.vector_store import VectorStoreService
         gc.collect()
         print("RAGService 6")
+        from src.services.archive_service import ArchiveService
+        print("RAGService 7")
 
         self.openai = OpenAI(api_key=OPENAI_API_KEY)
         self.genai_client = Client(api_key=GOOGLE_API_KEY) if GOOGLE_API_KEY else None
@@ -55,15 +57,23 @@ class RAGService:
         # self.data_processor = DataProcessor()
         self.text_chunker = TextChunker()
         self.vector_store = VectorStoreService(embedding_model=embedding_model)
+        self.archive = ArchiveService() # S3 아카이브 (app.py에서도 rag.archive로 사용)
         gc.collect()
 
 
-    def process_for_rag(self, pdf_path: str, doc_id: str):
+    def process_for_rag(self, pdf_path: str, doc_id: str, archive_prefix: str = None):
         """
         PDF 파일을 처리하여 RAG 시스템에 적재할 수 있는 형태로 변환 및 저장합니다.
         :param pdf_path: PDF 파일 경로
         :param doc_id: 문서를 식별할 수 있는 고유 ID (예: house_manage_no)
+        :param archive_prefix: S3 아카이브 폴더 (None이면 S3 저장 안 함)
+        :return: {"skipped": 이미 처리된 공고인지, "chunk_count": 생성된 청크 수}
         """
+        # 0. 이미 벡터 DB에 적재된 공고면 추출/청킹/아카이브 모두 건너뜀
+        if self.vector_store._exists(str(doc_id)):
+            print(f"⏩ doc_id={doc_id}는 이미 처리된 공고입니다. 분석을 건너뜁니다.")
+            return {"skipped": True, "chunk_count": 0}
+        
         # 1. Extract: PDF에서 Raw 데이터 추출
         print(f"🔍 PDF 추출 시작: {pdf_path}")
         # Upstage Information Extraction API 사용
@@ -77,6 +87,12 @@ class RAGService:
         with open("extracted_view.html", "r", encoding="utf-8") as f:
             html_content = f.read()
         markdown_content = self.pdf_extractor.html_to_markdown(html_content)
+
+        # (아카이브) 원본 PDF, 추출 HTML, 변환 Markdown 저장
+        if archive_prefix:
+            self.archive.put_file(pdf_path, archive_prefix + "notice.pdf", "application/pdf")
+            self.archive.put_text(html_content, archive_prefix + "extracted.html", "text/html; charset=utf-8")
+            self.archive.put_text(markdown_content, archive_prefix + "document.md", "text/markdown; charset=utf-8")
 
         # raw_content = self.pdf_extractor.extract_content(pdf_path) ############################################## 1
         # # raw_content = self.pdf_extractor_pymupdf.extract_content(pdf_path)
@@ -124,7 +140,12 @@ class RAGService:
         for chunk in chunks:
             chunk.metadata['doc_id'] = str(doc_id)
 
-        print(f"✅ 총 {len(chunks)}개의 청크가 생성되었습니다.")
+        chunk_count = len(chunks)
+        print(f"✅ 총 {chunk_count}개의 청크가 생성되었습니다.")
+
+        # (아카이브) 청크 저장 - 벡터 DB 저장 전에 올려서, 임베딩이 실패해도 디버깅 자료가 남도록 함
+        if archive_prefix:
+            self.archive.put_chunks(chunks, archive_prefix)
         
         # 5. Load: 벡터 DB 저장
         if chunks:
@@ -162,7 +183,7 @@ class RAGService:
             del chunks
             gc.collect()
 
-        return '====처리 완료===='
+        return {"skipped": False, "chunk_count": chunk_count}
 
     def answer_question(self, question: str, doc_id: str = None, model: str = "openai", conversation_history: list = []):
         """

@@ -23,6 +23,9 @@ html2text>=2025.4.15
 langchain-postgres==0.0.18
 psycopg[binary]==3.3.6
 
+# 파일/로그 아카이브 (AWS S3)
+boto3==1.43.108
+
 # LLM
 openai>=1.10.0
 google-genai>=0.2.0
