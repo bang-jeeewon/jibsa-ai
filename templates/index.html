@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ko">
   <head>
     <meta charset="UTF-8" />
@@ -19,7 +19,7 @@
       }
 
       body {
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
         background: #f0f2f5;
         height: 100vh;
         overflow: hidden;
@@ -181,7 +181,7 @@
       }
 
       /* 라디오 버튼 숨기기 */
-      .llm-selector input[type='radio'] {
+      .llm-selector input[type="radio"] {
         display: none;
       }
 
@@ -316,7 +316,9 @@
           <div id="calendar"></div>
         </div>
         <div style="margin-top: 10px; text-align: center">
-          <button onclick="resetDatabase()" class="reset-btn">🗑️ DB 초기화</button>
+          <button onclick="resetDatabase()" class="reset-btn">
+            🗑️ DB 초기화
+          </button>
         </div>
       </div>
 
@@ -358,17 +360,40 @@
             <div class="chat-input-area">
               <!-- LLM 선택 라디오 버튼 -->
               <div class="llm-selector">
-                <input type="radio" id="radio-openai" name="llm-selector" value="openai" checked onchange="selectLLM('openai')" />
-                <label for="radio-openai" class="llm-btn" title="GPT-4o-mini 사용">🤖 GPT</label>
+                <input
+                  type="radio"
+                  id="radio-openai"
+                  name="llm-selector"
+                  value="openai"
+                  checked
+                  onchange="selectLLM('openai')"
+                />
+                <label
+                  for="radio-openai"
+                  class="llm-btn"
+                  title="GPT-4o-mini 사용"
+                  >🤖 GPT</label
+                >
 
-                <input type="radio" id="radio-gemini" name="llm-selector" value="gemini" onchange="selectLLM('gemini')" />
-                <label for="radio-gemini" class="llm-btn" title="Gemini Pro 사용">✨ Gemini</label>
+                <input
+                  type="radio"
+                  id="radio-gemini"
+                  name="llm-selector"
+                  value="gemini"
+                  onchange="selectLLM('gemini')"
+                />
+                <label
+                  for="radio-gemini"
+                  class="llm-btn"
+                  title="Gemini Pro 사용"
+                  >✨ Gemini</label
+                >
               </div>
               <input
                 type="text"
                 id="question-input"
                 placeholder="예: 전매제한 기간은 어떻게 되나요?"
-                onkeypress="if(event.key === 'Enter') sendQuestion()"
+                onkeypress="if (event.key === 'Enter') sendQuestion();"
               />
               <button onclick="sendQuestion()">전송</button>
             </div>
@@ -378,19 +403,19 @@
     </div>
 
     <script>
-      document.addEventListener('DOMContentLoaded', function () {
-        const calendarEl = document.getElementById('calendar');
+      document.addEventListener("DOMContentLoaded", function () {
+        const calendarEl = document.getElementById("calendar");
         const calendar = new FullCalendar.Calendar(calendarEl, {
-          initialView: 'dayGridMonth',
+          initialView: "dayGridMonth",
           headerToolbar: {
-            left: 'prev,next',
-            center: 'title',
-            right: 'today',
+            left: "prev,next",
+            center: "title",
+            right: "today",
           },
-          height: '100%',
-          locale: 'ko',
+          height: "100%",
+          locale: "ko",
           dayMaxEvents: true, // 이벤트가 많으면 +more 표시
-          events: '/api/calendar-data', // 백엔드에서 데이터 로드
+          events: "/api/calendar-data", // 백엔드에서 데이터 로드
           eventClick: function (info) {
             // 공고 클릭 시 처리
             handleEventClick(info.event);
@@ -407,28 +432,28 @@
       });
 
       let currentHouseManageNo = null; // 현재 선택된 공고 ID 저장
-      let selectedLLM = 'openai'; // 기본값: GPT
+      let selectedLLM = "openai"; // 기본값: GPT
       let conversationHistory = []; // 이전 대화 내용
 
       function initializeLLMButtons() {
         // 라디오 버튼으로 GPT 선택 (기본값)
-        const openaiRadio = document.getElementById('radio-openai');
-        const geminiRadio = document.getElementById('radio-gemini');
+        const openaiRadio = document.getElementById("radio-openai");
+        const geminiRadio = document.getElementById("radio-gemini");
 
         if (openaiRadio && geminiRadio) {
           openaiRadio.checked = true;
           geminiRadio.checked = false;
-          selectedLLM = 'openai';
-          console.log('LLM 버튼 초기화 완료: GPT 선택됨');
+          selectedLLM = "openai";
+          console.log("LLM 버튼 초기화 완료: GPT 선택됨");
         }
       }
 
       function selectLLM(llm) {
-        const openaiRadio = document.getElementById('radio-openai');
-        const geminiRadio = document.getElementById('radio-gemini');
+        const openaiRadio = document.getElementById("radio-openai");
+        const geminiRadio = document.getElementById("radio-gemini");
 
         if (!openaiRadio || !geminiRadio) {
-          console.error('LLM 라디오 버튼을 찾을 수 없습니다.');
+          console.error("LLM 라디오 버튼을 찾을 수 없습니다.");
           return;
         }
 
@@ -436,14 +461,14 @@
         selectedLLM = llm;
 
         // 라디오 버튼 상태 업데이트
-        if (llm === 'openai') {
+        if (llm === "openai") {
           openaiRadio.checked = true;
           geminiRadio.checked = false;
-          console.log('LLM 선택됨: GPT-4o-mini');
-        } else if (llm === 'gemini') {
+          console.log("LLM 선택됨: GPT-4o-mini");
+        } else if (llm === "gemini") {
           openaiRadio.checked = false;
           geminiRadio.checked = true;
-          console.log('LLM 선택됨: Gemini Pro');
+          console.log("LLM 선택됨: Gemini Pro");
         }
       }
 
@@ -452,27 +477,30 @@
         currentHouseManageNo = data.house_manage_no; // 선택 시 ID 저장
 
         // 1. 화면 전환 (분석 중 표시)
-        document.getElementById('empty-state').style.display = 'none';
-        document.getElementById('detail-view').style.display = 'none';
-        const overlay = document.getElementById('analyzing-overlay');
-        const progressText = document.getElementById('progress-detail');
-        overlay.style.display = 'flex';
+        document.getElementById("empty-state").style.display = "none";
+        document.getElementById("detail-view").style.display = "none";
+        const overlay = document.getElementById("analyzing-overlay");
+        const progressText = document.getElementById("progress-detail");
+        overlay.style.display = "flex";
 
         // 2. 헤더 정보 업데이트
-        document.getElementById('apt-name').textContent = event.title;
-        document.getElementById('apt-region').textContent = data.subscrpt_area_code_nm || '지역 정보 없음';
-        document.getElementById('apt-period').textContent = `접수: ${data.startDate} ~ ${data.endDate}`;
-        document.getElementById('apt-house-type').textContent = data.house_secd_nm || '정보 없음';
+        document.getElementById("apt-name").textContent = event.title;
+        document.getElementById("apt-region").textContent =
+          data.subscrpt_area_code_nm || "지역 정보 없음";
+        document.getElementById("apt-period").textContent =
+          `접수: ${data.startDate} ~ ${data.endDate}`;
+        document.getElementById("apt-house-type").textContent =
+          data.house_secd_nm || "정보 없음";
 
         try {
           // 3. 분석 API 호출 (PDF 다운로드 -> 분석)
-          progressText.textContent = '공고문 PDF를 다운로드하고 있습니다...';
+          progressText.textContent = "공고문 PDF를 다운로드하고 있습니다...";
 
           // await new Promise((r) => setTimeout(r, 1500)); // 가짜 딜레이 1.5초
-          const response = await fetch('/api/analyze', {
-            method: 'POST',
+          const response = await fetch("/api/analyze", {
+            method: "POST",
             headers: {
-              'Content-Type': 'application/json',
+              "Content-Type": "application/json",
             },
             body: JSON.stringify({
               pblanc_url: data.pblanc_url, // 모집공고문 상세 URL
@@ -483,49 +511,55 @@
           });
 
           if (!response.ok) {
-            throw new Error('Network response was not ok');
+            throw new Error("Network response was not ok");
           }
 
           const result = await response.json();
 
           // 4. 완료 후 상세 화면 표시
-          overlay.style.display = 'none';
-          document.getElementById('detail-view').style.display = 'flex';
+          overlay.style.display = "none";
+          document.getElementById("detail-view").style.display = "flex";
 
           // LLM 버튼 초기화 (새로운 공고 선택 시)
           initializeLLMButtons();
 
           // 채팅창 초기화 (새로운 공고이므로)
-          const messages = document.getElementById('messages');
+          const messages = document.getElementById("messages");
           messages.innerHTML = `<div class="message assistant"><strong>${event.title}</strong> 공고문 분석이 완료되었습니다.<br>무엇이든 물어보세요! (예: 1순위 자격 조건, 전매 제한 등)</div>`;
         } catch (error) {
-          alert('분석 중 오류가 발생했습니다.');
-          overlay.style.display = 'none';
-          document.getElementById('empty-state').style.display = 'flex';
+          alert("분석 중 오류가 발생했습니다.");
+          overlay.style.display = "none";
+          document.getElementById("empty-state").style.display = "flex";
         }
       }
 
       async function sendQuestion() {
-        const input = document.getElementById('question-input');
-        const messages = document.getElementById('messages');
+        const input = document.getElementById("question-input");
+        const messages = document.getElementById("messages");
         const question = input.value.trim();
 
         if (!question) return;
 
         // 사용자 메시지 추가
-        messages.insertAdjacentHTML('beforeend', `<div class="message user">${question}</div>`);
-        input.value = '';
+        messages.insertAdjacentHTML(
+          "beforeend",
+          `<div class="message user">${question}</div>`,
+        );
+        input.value = "";
         messages.scrollTop = messages.scrollHeight;
 
         // 로딩 표시
-        const loadingId = 'loading-' + Date.now();
-        messages.insertAdjacentHTML('beforeend', `<div id="${loadingId}" class="message assistant">답변 생성 중...</div>`);
+        const loadingId = "loading-" + Date.now();
+        messages.insertAdjacentHTML(
+          "beforeend",
+          `<div id="${loadingId}" class="message assistant">답변 생성 중...</div>`,
+        );
         messages.scrollTop = messages.scrollHeight;
 
         try {
-          const response = await fetch('/api/query', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+          const response = await fetch("/api/query", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               question: question,
               house_manage_no: currentHouseManageNo, // 질문 시 ID 함께 전송
@@ -535,38 +569,47 @@
           });
           const data = await response.json();
 
-          conversationHistory.push({ role: 'user', content: question }); // 사용자 질문
-          conversationHistory.push({ role: 'AI', content: data.answer }); // AI 답변
+          conversationHistory.push({ role: "user", content: question }); // 사용자 질문
+          conversationHistory.push({ role: "AI", content: data.answer }); // AI 답변
 
           // 로딩 제거 및 응답 표시
           const loadingElement = document.getElementById(loadingId);
           if (loadingElement) loadingElement.remove();
 
-          messages.insertAdjacentHTML('beforeend', `<div class="message assistant">${data.answer}</div>`);
+          messages.insertAdjacentHTML(
+            "beforeend",
+            `<div class="message assistant">${data.answer}</div>`,
+          );
         } catch (error) {
           const loadingElement = document.getElementById(loadingId);
           if (loadingElement) loadingElement.remove();
 
-          messages.insertAdjacentHTML('beforeend', `<div class="message assistant">오류 발생: ${error.message}</div>`);
+          messages.insertAdjacentHTML(
+            "beforeend",
+            `<div class="message assistant">오류 발생: ${error.message}</div>`,
+          );
         }
         // 메시지 추가 후 스크롤 최하단 이동
         messages.scrollTop = messages.scrollHeight;
       }
 
       async function resetDatabase() {
-        if (!confirm('정말 모든 분석 데이터를 삭제하시겠습니까?')) return;
+        const password = prompt(
+          "DB 초기화 패스워드를 입력하세요.\n(모든 분석 데이터가 삭제됩니다)",
+        );
+        if (!password) return; // 취소했거나 빈 값이면 중단
 
         try {
-          const response = await fetch('/api/reset', { method: 'POST' });
+          const response = await fetch("/api/reset", { method: "POST" });
           const result = await response.json();
-          if (result.status === 'success') {
-            alert('DB가 초기화되었습니다.');
+          if (result.status === "success") {
+            alert("DB가 초기화되었습니다.");
             location.reload(); // 페이지 새로고침
           } else {
-            alert('초기화 실패: ' + result.message);
+            alert("초기화 실패: " + result.message);
           }
         } catch (error) {
-          alert('오류 발생: ' + error.message);
+          alert("오류 발생: " + error.message);
         }
       }
     </script>

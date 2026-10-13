@@ -3,6 +3,7 @@ import json
 import os
 import sys
 import gc
+import hmac
 import time
 from pathlib import Path
 from datetime import datetime, timedelta
@@ -225,7 +226,18 @@ def query():
 
 @app.route('/api/reset', methods=['POST'])
 def reset_db():
-    """벡터 DB 초기화"""
+    """벡터 DB 초기화 (패스워드 확인 후 진행)"""
+    from src.config.config import RESET_PASSWORD
+
+    # 비밀번호가 설정되지 않은 환경에서는 초기화 기능 자체를 막음
+    if not RESET_PASSWORD:
+        return jsonify({"status": "error", "message": "초기화 패스워드가 설정되지 않아 사용할 수 없습니다."}), 403
+
+    password = (request.get_json(silent=True) or {}).get("password", "")
+    # 비교에 걸리는 시간 차이로 비밀번호를 추측하는 공격을 막기 위해 compare_digest 사용
+    if not hmac.compare_digest(password.encode("utf-8"), RESET_PASSWORD.encode("utf-8")):
+        return jsonify({"status": "error", "message": "패스워드가 올바르지 않습니다"}), 401
+    
     try:
         rag = get_rag_service()
     except Exception as e:

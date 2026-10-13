@@ -24,3 +24,6 @@ SUPABASE_DB_URL = os.getenv("SUPABASE_DB_URL")
 
 AWS_S3_BUCKET = os.getenv("AWS_S3_BUCKET")
 AWS_REGION = os.getenv("AWS_REGION", "ap-northeast-2")
+
+# DB 초기화 버튼 패스워드
+RESET_PASSWORD = os.getenv("RESET_PASSWORD")
