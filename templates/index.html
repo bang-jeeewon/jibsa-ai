@@ -303,6 +303,56 @@
       .reset-btn:hover {
         background: #4b5563;
       }
+
+      /* DB 초기화 비밀번호 입력 폼 */
+      .reset-form {
+        margin-top: 8px;
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        background: #fafafa;
+        text-align: left;
+      }
+      .reset-warning {
+        margin: 0 0 6px;
+        font-size: 0.75rem;
+        color: #dc2626;
+      }
+      .reset-form input {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 6px 8px;
+        border: 1px solid #ccc;
+        border-radius: 6px;
+        font-size: 0.8rem;
+      }
+      .reset-actions {
+        display: flex;
+        gap: 6px;
+        margin-top: 6px;
+      }
+      .reset-actions button {
+        flex: 1;
+        padding: 6px 0;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 0.8rem;
+      }
+      .reset-confirm-btn {
+        background: #dc2626;
+        color: white;
+      }
+      .reset-cancel-btn {
+        background: #e5e7eb;
+        color: #374151;
+      }
+      .reset-message {
+        margin: 6px 0 0;
+        min-height: 1em;
+        font-size: 0.75rem;
+        color: #dc2626;
+      }
     </style>
   </head>
   <body>
@@ -316,9 +366,36 @@
           <div id="calendar"></div>
         </div>
         <div style="margin-top: 10px; text-align: center">
-          <button onclick="resetDatabase()" class="reset-btn">
+          <button type="button" onclick="toggleResetForm()" class="reset-btn">
             🗑️ DB 초기화
           </button>
+          <!-- DB 초기화 비밀번호 입력 (버튼 클릭 시 표시 / 서비스 오픈 시 버튼과 함께 제거 예정) -->
+          <form
+            id="reset-form"
+            class="reset-form"
+            style="display: none"
+            onsubmit="resetDatabase(event)"
+          >
+            <p class="reset-warning">모든 분석 데이터가 삭제됩니다.</p>
+            <input
+              type="password"
+              id="reset-password"
+              placeholder="초기화 비밀번호"
+              autocomplete="off"
+              onkeydown="if (event.key === 'Escape') toggleResetForm(false)"
+            />
+            <div class="reset-actions">
+              <button type="submit" class="reset-confirm-btn">초기화</button>
+              <button
+                type="button"
+                class="reset-cancel-btn"
+                onclick="toggleResetForm(false)"
+              >
+                취소
+              </button>
+            </div>
+            <p id="reset-message" class="reset-message"></p>
+          </form>
         </div>
       </div>
 
@@ -593,23 +670,46 @@
         messages.scrollTop = messages.scrollHeight;
       }
 
-      async function resetDatabase() {
-        const password = prompt(
-          "DB 초기화 패스워드를 입력하세요.\n(모든 분석 데이터가 삭제됩니다)",
-        );
-        if (!password) return; // 취소했거나 빈 값이면 중단
+      // DB 초기화 입력 폼 열기/닫기 (show를 생략하면 현재 상태를 반대로)
+      function toggleResetForm(show) {
+        const form = document.getElementById("reset-form");
+        const input = document.getElementById("reset-password");
+        const willShow = show ?? form.style.display === "none";
+
+        form.style.display = willShow ? "block" : "none";
+        input.value = "";
+        document.getElementById("reset-message").textContent = "";
+        if (willShow) input.focus();
+      }
+
+      async function resetDatabase(event) {
+        event.preventDefault(); // form 제출 시 페이지가 새로고침되는 기본 동작 막기
+        const input = document.getElementById("reset-password");
+        const message = document.getElementById("reset-message");
+        const password = input.value;
+
+        if (!password) {
+          message.textContent = "비밀번호를 입력하세요.";
+          return;
+        }
 
         try {
-          const response = await fetch("/api/reset", { method: "POST" });
+          const response = await fetch("/api/reset", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ password }),
+          });
           const result = await response.json();
           if (result.status === "success") {
             alert("DB가 초기화되었습니다.");
             location.reload(); // 페이지 새로고침
           } else {
-            alert("초기화 실패: " + result.message);
+            message.textContent = result.message;
+            input.value = "";
+            input.focus();
           }
         } catch (error) {
-          alert("오류 발생: " + error.message);
+          message.textContent = "오류 발생: " + error.message;
         }
       }
     </script>
