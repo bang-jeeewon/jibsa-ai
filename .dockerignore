@@ -30,3 +30,6 @@ Dockerfile
 
 # Chroma DB
 data/chroma_db/*
+
+# AI 답변 품질 관리
+eval/

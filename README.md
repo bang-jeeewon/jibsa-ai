@@ -1,7 +1,7 @@
 ## jibsa-ai 🚀
 
 청약 공고를 자동으로 읽고, 일정 관리부터 질문 답변까지 한 번에 처리하는 RAG 기반 웹 앱입니다.  
-배포 링크: https://jibsa-ai.onrender.com
+배포 링크: https://jibsa-ai-docker.onrender.com
 
 ### 한눈에 보는 하이라이트 📌
 
