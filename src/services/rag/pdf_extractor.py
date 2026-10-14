@@ -119,10 +119,10 @@ class PDFExtractor:
         markdown_result = h.handle(str(soup))
         
         # 4. 마커를 실제 정규화된 마크다운 표로 교체
-        for i, md_table in enumerate(normalized_tables):
-            # html2text 변환 결과에 따라 마커 앞뒤에 공백이 생길 수 있으므로 유연하게 처리
+        # 큰 번호부터 치환 (0번부터 하면 REPLACE_ME_TABLE_1이 REPLACE_ME_TABLE_14의 앞부분까지 바꿔버림)
+        for i in reversed(range(len(normalized_tables))):
             target = f"REPLACE_ME_TABLE_{i}"
-            markdown_result = markdown_result.replace(target, md_table)
+            markdown_result = markdown_result.replace(target, normalized_tables[i])
             
         gc.collect()
         return markdown_result
